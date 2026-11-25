@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="clips-token" content="__CLIPS_TOKEN__" />
     <title>uberdesigner clips</title>
     <meta name="description" content="Видеоредактор для дизайнеров: соберите клип о своей работе прямо в браузере." />
     <link rel="stylesheet" href="css/app.css" />
@@ -53,10 +54,19 @@
           <button id="zoomIn" class="icon" title="Крупнее" aria-label="Крупнее">+</button>
         </div>
         <div id="timeline" class="timeline"><div id="tlInner" class="tlInner"></div></div>
+        <form id="chat" class="chat" hidden>
+          <span id="chip" class="chip"></span>
+          <textarea id="ask" rows="1" placeholder="Что изменить? Например: «сделай сцену короче и выведи цифру счётчиком»"></textarea>
+          <select id="model" title="Модель Claude"></select>
+          <button class="primary" id="send">Изменить</button>
+        </form>
       </main>
 
       <aside class="right">
-        <div class="tabs"><button class="on">Свойства</button></div>
+        <div class="tabs" id="rightTabs" hidden>
+          <button data-tab="props" class="on">Свойства</button>
+          <button data-tab="ai">AI-изменения<i id="aiDot" class="dot" hidden></i></button>
+        </div>
         <div id="rightBody" class="body"></div>
       </aside>
     </div>

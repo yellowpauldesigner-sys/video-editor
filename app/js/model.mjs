@@ -11,7 +11,11 @@ export const FORMATS = {
 
 export const LAYER_KINDS = ["video", "image", "text", "shape", "site"];
 export const FITS = ["cover", "contain"];
-export const MOTIONS = ["none", "fade", "up", "down", "left", "right", "scale", "blur"];
+export const MOTIONS = ["none", "fade", "up", "down", "left", "right", "scale", "blur", "grow-x", "grow-y"];
+// How a text comes in piece by piece, and the pieces it can be cut into
+export const TEXT_UNITS = ["line", "word", "letter"];
+export const TEXT_MOTIONS = ["fade", "up", "down", "scale", "blur"];
+export const SHAPES = ["rect", "ellipse"];
 export const TRANSITIONS = ["cut", "fade", "slide-left", "slide-up", "zoom", "wipe"];
 export const EASES = ["linear", "in", "out", "inOut", "expoOut", "backOut"];
 export const SITE_ACTIONS = ["wait", "scroll", "wheel", "move", "click", "type", "key"];
@@ -128,6 +132,17 @@ export function siteKey(layer) {
   let h = 5381;
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
+}
+
+// The number a counting text shows `at` seconds into its layer
+export function countValue(count, at, layerDuration) {
+  const d = count.duration ?? Math.min(layerDuration, 1.5);
+  const v = lerp(count.from ?? 0, count.to, ease(count.ease ?? "expoOut", d > 0 ? at / d : 1));
+  const fixed = v.toFixed(count.decimals ?? 0);
+  // thin spaces between thousands, as a designer would set them
+  const [whole, frac] = fixed.split(".");
+  const grouped = count.group === false ? whole : whole.replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f");
+  return frac ? `${grouped}${count.comma ? "," : "."}${frac}` : grouped;
 }
 
 // ---------- edits ----------
@@ -311,7 +326,29 @@ export function validate(clip) {
       if (l.kind === "text") {
         if (!isStr(l.text)) errors.push(`${ln}: text — строка`);
         if (l.weight != null && !(isNum(l.weight) && l.weight >= 100 && l.weight <= 900)) errors.push(`${ln}: weight — от 100 до 900`);
+        if (l.animate != null) {
+          const a = l.animate;
+          if (!isObj(a) || !TEXT_UNITS.includes(a.by)) errors.push(`${ln}: animate.by — один из ${TEXT_UNITS.join(", ")}`);
+          else {
+            if (a.type != null && !TEXT_MOTIONS.includes(a.type)) errors.push(`${ln}: animate.type — один из ${TEXT_MOTIONS.join(", ")}`);
+            if (a.stagger != null && !(isNum(a.stagger) && a.stagger >= 0 && a.stagger <= 5)) errors.push(`${ln}: animate.stagger — секунды между соседними кусками, от 0 до 5`);
+            if (a.duration != null && !(isNum(a.duration) && a.duration > 0 && a.duration <= 10)) errors.push(`${ln}: animate.duration — секунды, больше 0`);
+            if (a.ease != null && !EASES.includes(a.ease)) errors.push(`${ln}: animate.ease — одна из ${EASES.join(", ")}`);
+          }
+        }
+        if (l.count != null) {
+          const c = l.count;
+          if (!isObj(c) || !isNum(c.to)) errors.push(`${ln}: count — { from, to, decimals, duration, ease }, to обязательно`);
+          else {
+            if (c.from != null && !isNum(c.from)) errors.push(`${ln}: count.from — число`);
+            if (c.decimals != null && !(Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 4)) errors.push(`${ln}: count.decimals — целое от 0 до 4`);
+            if (c.duration != null && !(isNum(c.duration) && c.duration > 0)) errors.push(`${ln}: count.duration — секунды, больше 0`);
+            if (c.ease != null && !EASES.includes(c.ease)) errors.push(`${ln}: count.ease — одна из ${EASES.join(", ")}`);
+            if (isStr(l.text) && !l.text.includes("{n}")) errors.push(`${ln}: в text нужно место для числа — {n}`);
+          }
+        }
       }
+      if (l.kind === "shape" && l.shape != null && !SHAPES.includes(l.shape)) errors.push(`${ln}: shape — один из ${SHAPES.join(", ")}`);
       if (l.kind === "site") {
         if (!isWebAddress(l.url)) errors.push(`${ln}: url — адрес сайта, начинается с http:// или https://`);
         if (l.recording != null && !isMediaPath(l.recording)) errors.push(`${ln}: recording — файл в папке media/`);

@@ -7,7 +7,7 @@
 //   stage.tick(t)                        the same while playing: videos run by themselves and are kept in step
 //   stage.hit(x, y), stage.rect(id)      what is where, in frame pixels
 
-import { ease, frameSize, isMoving, layerSource, layerSpan, lerp, resolveLayer, sceneAt, sceneDuration, totalDuration } from "./model.mjs";
+import { countValue, ease, frameSize, isMoving, layerSource, layerSpan, lerp, resolveLayer, sceneAt, sceneDuration, totalDuration } from "./model.mjs";
 
 let fontsKey = "";
 // Fonts the clip names: Google Fonts by family, or a file of the clip
@@ -136,6 +136,51 @@ export class Stage {
     else if (type === "right") o.tx -= k * 0.08 * this.size.width;
     else if (type === "scale") o.scale *= 1 - 0.12 * k;
     else if (type === "blur") o.blur += k * 24 * this.unit;
+    else if (type === "grow-x" || type === "grow-y") {
+      // a bar that grows, a line that draws itself: the layer is uncovered from its left edge or from its foot
+      o.opacity /= 1 - k || 1;
+      o.reveal = { axis: type === "grow-x" ? "x" : "y", k: 1 - k };
+    }
+  }
+
+  // Text that comes in piece by piece: each line, word or letter with its own delay
+  drawTextUnits(ctx, lines, L, at, size, lh, bw, bh, align) {
+    const a = L.animate;
+    const type = a.type ?? "up";
+    const d = a.duration ?? 0.5;
+    const stagger = a.stagger ?? (a.by === "letter" ? 0.03 : a.by === "word" ? 0.08 : 0.14);
+    const baseAlpha = ctx.globalAlpha;
+    ctx.textAlign = "left";
+    let index = 0;
+    lines.forEach((line, i) => {
+      const width = ctx.measureText(line).width;
+      const x0 = align === "left" ? -bw / 2 : align === "right" ? bw / 2 - width : -width / 2;
+      const y = -bh / 2 + i * lh + lh / 2 + size * 0.35;
+      const units = a.by === "line" ? [line] : a.by === "word" ? line.split(/(\s+)/) : Array.from(line);
+      let before = "";
+      for (const unit of units) {
+        if (!unit.trim()) {
+          before += unit;
+          continue;
+        }
+        const k = 1 - ease(a.ease ?? "expoOut", (at - index * stagger) / d); // how much of this piece is still hidden
+        index++;
+        const x = x0 + ctx.measureText(before).width;
+        before += unit;
+        if (k >= 0.999) continue;
+        ctx.save();
+        ctx.globalAlpha = baseAlpha * (1 - k);
+        if (type === "blur" && k > 0.01) ctx.filter = `blur(${(k * size * 0.25).toFixed(2)}px)`;
+        if (type === "scale") {
+          const w = ctx.measureText(unit).width;
+          ctx.translate(x + w / 2, y - size * 0.3);
+          ctx.scale(1 - 0.4 * k, 1 - 0.4 * k);
+          ctx.translate(-(x + w / 2), -(y - size * 0.3));
+        }
+        ctx.fillText(unit, x, y + (type === "up" ? k * size * 0.6 : type === "down" ? -k * size * 0.6 : 0));
+        ctx.restore();
+      }
+    });
   }
 
   // Break a text into the lines it is drawn as
@@ -209,14 +254,23 @@ export class Stage {
         ctx.fillStyle = L.color ?? "#fff";
         ctx.textBaseline = "alphabetic";
         bw = ((L.maxWidth ?? 84) / 100) * W;
-        const text = L.uppercase ? String(L.text ?? "").toUpperCase() : L.text;
+        let text = String(L.text ?? "");
+        if (L.count) text = text.replace("{n}", countValue(L.count, at, span.duration));
+        if (L.uppercase) text = text.toUpperCase();
         const lines = this.lines(ctx, text, bw);
         const lh = size * (L.lineHeight ?? 1.05);
         bh = lines.length * lh;
         const align = L.align ?? "center";
         ctx.textAlign = align;
         const ax = align === "left" ? -bw / 2 : align === "right" ? bw / 2 : 0;
-        lines.forEach((line, i) => ctx.fillText(line, ax, -bh / 2 + i * lh + lh / 2 + size * 0.35));
+        if (o.reveal) {
+          ctx.beginPath();
+          if (o.reveal.axis === "x") ctx.rect(-bw / 2, -bh / 2 - size, bw * o.reveal.k, bh + size * 2);
+          else ctx.rect(-bw / 2, bh / 2 + size - (bh + size * 2) * o.reveal.k, bw, (bh + size * 2) * o.reveal.k);
+          ctx.clip();
+        }
+        if (L.animate && !held) this.drawTextUnits(ctx, lines, L, at, size, lh, bw, bh, align);
+        else lines.forEach((line, i) => ctx.fillText(line, ax, -bh / 2 + i * lh + lh / 2 + size * 0.35));
         // the box a person grabs is the words themselves, not the whole column they may wrap in
         const widest = Math.max(1, ...lines.map((l) => ctx.measureText(l).width));
         this.note(raw.id, ctx, align === "left" ? -bw / 2 : align === "right" ? bw / 2 - widest : -widest / 2, -bh / 2, widest, bh);
@@ -224,8 +278,15 @@ export class Stage {
         bw = ((L.box?.w ?? 100) / 100) * W;
         bh = ((L.box?.h ?? 100) / 100) * H;
         const r = Math.min((L.radius ?? 0) * this.unit, bw / 2, bh / 2);
+        if (o.reveal) {
+          ctx.beginPath();
+          if (o.reveal.axis === "x") ctx.rect(-bw / 2, -bh / 2, bw * o.reveal.k, bh);
+          else ctx.rect(-bw / 2, bh / 2 - bh * o.reveal.k, bw, bh * o.reveal.k);
+          ctx.clip();
+        }
         ctx.beginPath();
-        if (r > 0) ctx.roundRect(-bw / 2, -bh / 2, bw, bh, r);
+        if (L.kind === "shape" && L.shape === "ellipse") ctx.ellipse(0, 0, bw / 2, bh / 2, 0, 0, Math.PI * 2);
+        else if (r > 0) ctx.roundRect(-bw / 2, -bh / 2, bw, bh, r);
         else ctx.rect(-bw / 2, -bh / 2, bw, bh);
         if (L.kind === "shape") {
           ctx.fillStyle = L.fill ?? "#7548d9";

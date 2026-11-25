@@ -1,0 +1,11 @@
+{
+  "name": "uberdesigner-clips",
+  "private": true,
+  "type": "module",
+  "description": "uberdesigner clips: a video editor for designers. One codebase: a Claude Code skill with a localhost editor, and the same editor as a plain site. No dependencies.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/clips.mjs check"
+  }
+}

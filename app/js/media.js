@@ -149,3 +149,103 @@ export async function recordTab({ fps = 60, onEnd } = {}) {
   const settings = stream.getVideoTracks()[0].getSettings();
   return { stop, type, seconds: () => (performance.now() - started) / 1000, width: settings.width, height: settings.height };
 }
+
+// ---------- finding the cuts in a finished video ----------
+
+// Where a video changes shot, in seconds. The video is looked at a few times a second as a tiny picture; a cut is
+// a moment where the picture changes far more than it does around it. Slow fades are not found: a designer cuts
+// those by hand with S.
+export async function detectCuts(url, { onProgress, shouldStop, step = 0.2, minScene = 0.6 } = {}) {
+  const v = document.createElement("video");
+  v.muted = true;
+  v.preload = "auto";
+  v.src = url;
+  await once(v, "loadeddata");
+  const duration = await trueDuration(v);
+  const W = 48;
+  const H = 27;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  const diffs = [];
+  let prev = null;
+  const count = Math.max(1, Math.floor(duration / step));
+  for (let i = 0; i <= count; i++) {
+    if (shouldStop?.()) break;
+    const t = Math.min(i * step, Math.max(0, duration - 0.01));
+    v.currentTime = t;
+    await once(v, "seeked", 6000).catch(() => {});
+    ctx.drawImage(v, 0, 0, W, H);
+    const px = ctx.getImageData(0, 0, W, H).data;
+    // brightness of each pixel, and a coarse colour histogram: a pan moves pixels but keeps the colours
+    const luma = new Float32Array(W * H);
+    const hist = new Float32Array(64);
+    for (let p = 0, q = 0; p < px.length; p += 4, q++) {
+      luma[q] = 0.299 * px[p] + 0.587 * px[p + 1] + 0.114 * px[p + 2];
+      hist[((px[p] >> 6) << 4) | ((px[p + 1] >> 6) << 2) | (px[p + 2] >> 6)]++;
+    }
+    if (prev) {
+      let d = 0;
+      for (let q = 0; q < luma.length; q++) d += Math.abs(luma[q] - prev.luma[q]);
+      let hd = 0;
+      for (let b = 0; b < 64; b++) hd += Math.abs(hist[b] - prev.hist[b]);
+      diffs.push({ t, pixels: d / luma.length / 255, colours: hd / (2 * W * H) });
+    }
+    prev = { luma, hist };
+    if (i % 5 === 0) onProgress?.(i / count);
+  }
+  v.removeAttribute("src");
+  v.load();
+  // a cut: both measures jump, and the jump stands well above the moments around it
+  const score = diffs.map((d) => Math.min(d.pixels * 2.2, d.colours * 1.6));
+  const cuts = [];
+  for (let i = 0; i < score.length; i++) {
+    const around = [];
+    for (let k = Math.max(0, i - 4); k <= Math.min(score.length - 1, i + 4); k++) if (k !== i) around.push(score[k]);
+    const calm = around.length ? around.sort((a, b) => a - b)[Math.floor(around.length / 2)] : 0;
+    if (score[i] > 0.18 && score[i] > calm * 3 + 0.06) {
+      const at = diffs[i].t - step / 2;
+      if (at > minScene && duration - at > minScene && (!cuts.length || at - cuts.at(-1) >= minScene)) cuts.push(Math.round(at * 100) / 100);
+    }
+  }
+  return { cuts, duration };
+}
+
+// Narrow a cut found on the coarse grid down to the frame where it happens
+export async function refineCut(url, at, { step = 0.2, fps = 30 } = {}) {
+  const v = document.createElement("video");
+  v.muted = true;
+  v.preload = "auto";
+  v.src = url;
+  await once(v, "loadeddata");
+  const c = document.createElement("canvas");
+  c.width = 48;
+  c.height = 27;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  const grab = async (t) => {
+    v.currentTime = Math.max(0, t);
+    await once(v, "seeked", 6000).catch(() => {});
+    ctx.drawImage(v, 0, 0, 48, 27);
+    return ctx.getImageData(0, 0, 48, 27).data;
+  };
+  const dist = (a, b) => {
+    let d = 0;
+    for (let p = 0; p < a.length; p += 4) d += Math.abs(a[p] - b[p]) + Math.abs(a[p + 1] - b[p + 1]) + Math.abs(a[p + 2] - b[p + 2]);
+    return d;
+  };
+  let lo = at - step / 2;
+  let hi = at + step / 2;
+  const first = await grab(lo);
+  const last = await grab(hi);
+  // the cut is where a frame stops looking like the shot before and starts looking like the one after
+  while (hi - lo > 1 / fps) {
+    const mid = (lo + hi) / 2;
+    const m = await grab(mid);
+    if (dist(m, first) < dist(m, last)) lo = mid;
+    else hi = mid;
+  }
+  v.removeAttribute("src");
+  v.load();
+  return Math.round(hi * fps) / fps;
+}

@@ -3,13 +3,16 @@
 // and the video file is built here too.
 
 import {
-  blankClip, duplicateScene, EASES, findLayer, findScene, FITS, FORMATS, frameSize, freshId, layerSpan, mediaUsed, MOTIONS, resolveLayer, round, sceneAt,
-  sceneDuration, sceneStarts, setPlaced, splitScene, totalDuration, TRANSITIONS, validate,
+  actionsDuration, blankClip, duplicateScene, EASES, findLayer, findScene, FITS, FORMATS, frameSize, freshId, layerSpan, mediaUsed, MOTIONS, resolveLayer, round, sceneAt,
+  sceneDuration, sceneStarts, setPlaced, SHAPES, siteKey, splitScene, TEXT_MOTIONS, TEXT_UNITS, totalDuration, TRANSITIONS, validate,
 } from "./model.mjs";
 import { canExport, exportFormat } from "./export.js";
-import { canRecordTab, inspect, kindOf, recordTab, safeName } from "./media.js";
+import { canRecordTab, detectCuts, inspect, kindOf, recordTab, refineCut, safeName } from "./media.js";
 import { loadFonts, Stage } from "./renderer.js";
-import * as store from "./store.js";
+import { pickBackend } from "./backend.js";
+
+const B = pickBackend();
+const PROJECT = B.mode === "project";
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,7 +42,9 @@ const fmtTime = (t, fps = 30) => {
 };
 const secs = (n) => `${round(n, 2)} с`;
 const KIND_NAME = { video: "Видео", image: "Картинка", text: "Текст", shape: "Фигура", site: "Сайт", audio: "Звук" };
-const MOTION_NAME = { none: "Нет", fade: "Проявление", up: "Снизу", down: "Сверху", left: "Справа", right: "Слева", scale: "Масштаб", blur: "Размытие" };
+const MOTION_NAME = { none: "Нет", fade: "Проявление", up: "Снизу", down: "Сверху", left: "Справа", right: "Слева", scale: "Масштаб", blur: "Размытие", "grow-x": "Раскрытие слева", "grow-y": "Рост снизу" };
+const UNIT_NAME = { line: "По строкам", word: "По словам", letter: "По буквам" };
+const ACTION_NAME = { wait: "Пауза", scroll: "Прокрутка", wheel: "Колесо", move: "Курсор к", click: "Клик", type: "Ввод текста", key: "Клавиша" };
 const TRANSITION_NAME = { cut: "Склейка", fade: "Растворение", "slide-left": "Сдвиг влево", "slide-up": "Сдвиг вверх", zoom: "Наезд", wipe: "Шторка" };
 const EASE_NAME = { linear: "Ровно", in: "Разгон", out: "Торможение", inOut: "Плавно", expoOut: "Резкое торможение", backOut: "С отскоком" };
 
@@ -50,8 +55,14 @@ const S = {
   clips: [], // every clip kept in this browser: { id, name, updatedAt }
   clip: null,
   media: [], // this clip's files: { path, name, kind, width, height, duration, audio, thumb }
-  blobs: {}, // path → the file itself
   urls: {}, // path → an address the page can play it from
+  // only in a project: what the skill's server reports
+  cards: [],
+  sjobs: [],
+  tools: {},
+  rev: -1,
+  rightTab: "props",
+  wholeClip: false,
   problems: [],
   format: "16:9",
   sel: null, // { type: "scene" | "layer" | "audio", id }
@@ -67,6 +78,7 @@ const S = {
   redo: [],
   dragging: false,
   recording: null,
+  seenJobs: new Set(),
 };
 let stage = null;
 
@@ -102,7 +114,7 @@ function refreshFonts() {
 function problemsOf(clip) {
   const errors = validate(clip);
   if (errors.length) return errors;
-  for (const [path, who] of mediaUsed(clip)) if (!S.blobs[path]) errors.push(`${who.map((w) => `"${w}"`).join(", ")}: файла ${path.split("/").pop()} нет в клипе`);
+  for (const [path, who] of mediaUsed(clip)) if (!S.urls[path]) errors.push(`${who.map((w) => `"${w}"`).join(", ")}: файла ${path.split("/").pop()} нет в клипе`);
   return errors;
 }
 
@@ -121,10 +133,11 @@ function saveNow() {
   saving = saving.then(async () => {
     try {
       // a clip is kept even while something in it is wrong: the work must not be lost. The export is what waits.
-      await store.saveClip(id, clip);
-      await store.recordHistory(id, clip, label);
       S.problems = id === S.clipId ? problemsOf(S.clip) : S.problems;
-      $("saved").textContent = store.persistent() ? "Сохранено в этом браузере" : "Не сохраняется: приватное окно";
+      // a project's clip.json is what Claude and the render read: it is written only while it is whole
+      if (PROJECT && S.problems.length) throw new Error("в клипе ошибка");
+      await B.save(id, clip, label);
+      $("saved").textContent = B.savedNote();
       const mine = S.clips.find((c) => c.id === id);
       if (mine && mine.name !== clip.name) {
         mine.name = clip.name;
@@ -184,9 +197,12 @@ function select(sel) {
   S.sel = sel;
   if (sel?.type === "scene") S.sceneId = sel.id;
   if (sel?.type === "layer") S.sceneId = findLayer(S.clip, sel.id)?.scene.id ?? S.sceneId;
+  if (sel) S.wholeClip = false;
+  if (sel && S.rightTab !== "props") S.rightTab = "props";
   drawLeft();
   drawTimeline();
   drawRight();
+  drawChip();
   drawSelBox();
 }
 
@@ -265,6 +281,8 @@ function drawTop() {
 }
 
 function drawClips() {
+  $("clips").hidden = PROJECT; // a project is one clip: its folder
+  if (PROJECT) return;
   $("clips").replaceChildren(
     ...S.clips.map((c) => h("option", { value: c.id, selected: c.id === S.clipId }, c.name || "Клип")),
     h("option", { value: "+new" }, "＋ Новый клип"),
@@ -286,7 +304,7 @@ function drawNotice() {
   const lines = [];
   if (S.problems.length) lines.push(`В клипе ошибка, собрать видео пока нельзя:\n${S.problems.slice(0, 4).join("\n")}`);
   if (!canExport()) lines.push("Этот браузер не умеет собирать видео. Монтировать можно, а для сборки откройте редактор в Chrome или Edge.");
-  if (!store.persistent()) lines.push("Браузер не дал места для хранения (приватное окно?). Клип пропадёт, когда вы закроете вкладку.");
+  if (!B.persistent()) lines.push("Браузер не дал места для хранения (приватное окно?). Клип пропадёт, когда вы закроете вкладку.");
   $("notice").hidden = !lines.length;
   $("notice").textContent = lines.join("\n");
   layoutFrame();
@@ -398,6 +416,7 @@ function layersView() {
       { class: "addRow" },
       h("button", { class: "line", onclick: () => addLayer("text") }, "+ Текст"),
       h("button", { class: "line", onclick: () => addLayer("shape") }, "+ Фигура"),
+      PROJECT && S.tools.chrome && S.tools.ffmpeg ? h("button", { class: "line", onclick: () => addLayer("site") }, "+ Сайт") : null,
       h("button", { class: "line", onclick: addScene }, "+ Сцена"),
     ),
   ];
@@ -457,7 +476,7 @@ function mediaView() {
         "div",
         { class: "mediaItem", title: m.name },
         h("div", { class: "thumb", style: m.thumb ? `background-image:url("${m.thumb}")` : "" }, m.kind === "audio" ? "♪" : ""),
-        h("div", { class: "acts" }, m.kind === "audio" ? h("button", { onclick: () => addAudio(m) }, "+ Звуковая дорожка") : [h("button", { onclick: () => addMediaScene(m) }, "+ Новой сценой"), h("button", { onclick: () => addMediaLayer(m) }, "+ В эту сцену")], used.has(m.path) ? null : h("button", { class: "rm", title: "Убрать файл из клипа", onclick: () => removeMedia(m) }, "Убрать файл")),
+        h("div", { class: "acts" }, m.kind === "audio" ? h("button", { onclick: () => addAudio(m) }, "+ Звуковая дорожка") : [h("button", { onclick: () => addMediaScene(m) }, "+ Новой сценой"), h("button", { onclick: () => addMediaLayer(m) }, "+ В эту сцену"), m.kind === "video" && m.duration > 2 ? h("button", { onclick: () => splitIntoScenes(m) }, "✂ Разбить на сцены") : null], used.has(m.path) ? null : h("button", { class: "rm", title: "Убрать файл из клипа", onclick: () => removeMedia(m) }, "Убрать файл")),
         h("div", { class: "cap" }, h("b", {}, m.name), h("span", {}, meta || KIND_NAME[m.kind])),
       ),
     );
@@ -475,20 +494,20 @@ function historyView() {
       "div",
       { class: "ver" },
       h("div", {}, h("b", {}, v.label || "Правка"), h("span", {}, `${new Date(v.at).toLocaleString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}${i === 0 ? " · сейчас" : ""}`)),
-      i === 0 ? null : h("button", { class: "line", onclick: () => restore(v.n) }, "Вернуться"),
+      i === 0 ? null : h("button", { class: "line", onclick: () => restore(v.key) }, "Вернуться"),
     ),
   );
 }
 
 async function loadHistory() {
-  S.history = await store.listHistory(S.clipId);
+  S.history = await B.history(S.clipId);
   if (S.leftTab === "history") drawLeft();
 }
-async function restore(n) {
+async function restore(key) {
   await flush();
-  const clip = await store.historyClip(S.clipId, n);
+  const clip = await B.historyClip(S.clipId, key);
   if (!clip) return;
-  const entry = S.history.find((v) => v.n === n);
+  const entry = S.history.find((v) => v.key === key);
   edit(`Возврат к: ${entry?.label || "точке"}`, () => (S.clip = clip));
   fixSelection();
   drawAll();
@@ -518,6 +537,7 @@ function addLayer(kind) {
     if (local > 0.3) base.start = snap(local);
     if (kind === "text") Object.assign(base, { text: "Текст", size: 72, weight: 600, color: "#ffffff", enter: { type: "up", duration: 0.5 } });
     if (kind === "shape") Object.assign(base, { fill: "#7548d9", box: { w: 30, h: 30 }, radius: 24 });
+    if (kind === "site") Object.assign(base, { url: "http://localhost:5173", viewport: { width: 1920, height: 1080 }, actions: [{ do: "wait", for: 1 }, { do: "scroll", to: "bottom", for: 5, ease: "inOut" }, { do: "wait", for: 1 }] });
     scene.layers.push(base);
     S.sel = { type: "layer", id };
   });
@@ -569,15 +589,8 @@ async function ingest(file, name = file.name) {
   } catch {
     throw new Error(kind === "video" ? "браузер не может проиграть это видео (так бывает с ProRes и HEVC). Пересохраните его в MP4 (H.264)" : "браузер не может открыть этот файл");
   }
-  const clean = safeName(name);
-  const dot = clean.lastIndexOf(".");
-  const [stem, ext] = dot > 0 ? [clean.slice(0, dot), clean.slice(dot)] : [clean, ""];
-  let path = `media/${clean}`;
-  for (let n = 2; S.blobs[path]; n++) path = `media/${stem}-${n}${ext}`;
-  const item = { path, name: path.slice(6), kind, ...info };
-  await store.putMedia(S.clipId, { ...item, blob: file });
-  S.blobs[path] = file;
-  S.urls[path] = URL.createObjectURL(file);
+  const item = await B.addMedia(S.clipId, file, safeName(name), { kind, ...info });
+  S.urls[item.path] = item.url;
   S.media.push(item);
   return item;
 }
@@ -628,12 +641,56 @@ async function upload(files) {
 }
 
 async function removeMedia(m) {
-  await store.deleteMedia(S.clipId, m.path);
-  URL.revokeObjectURL(S.urls[m.path]);
+  await B.removeMedia(S.clipId, m.path);
   delete S.urls[m.path];
-  delete S.blobs[m.path];
   S.media = S.media.filter((x) => x !== m);
   drawLeft();
+}
+
+// A finished video becomes scenes: one for each shot found in it
+async function splitIntoScenes(m) {
+  const job = { id: ++jobId, label: `Ищу склейки: ${m.name}`, state: "running", progress: 0, note: "Смотрю видео…", files: [], stopped: false };
+  S.jobs.push(job);
+  drawJobs();
+  try {
+    const { cuts, duration } = await detectCuts(S.urls[m.path], { onProgress: (f) => ((job.progress = f * 0.8), drawJobs()), shouldStop: () => job.stopped });
+    if (job.stopped) throw new Error("Остановлено.");
+    const exact = [];
+    for (const [i, c] of cuts.entries()) {
+      job.note = `Уточняю склейку ${i + 1} из ${cuts.length}…`;
+      job.progress = 0.8 + (0.2 * i) / cuts.length;
+      drawJobs();
+      exact.push(await refineCut(S.urls[m.path], c, { fps: S.clip.fps }));
+    }
+    const marks = [0, ...exact, duration];
+    edit(`Разбивка на сцены: ${m.name}`, (clip) => {
+      const fresh = clip.scenes.length === 1 && clip.scenes[0].layers.every((l) => l.kind === "text" && l.id === "title-text");
+      const made = [];
+      for (let i = 0; i < marks.length - 1; i++) {
+        const layer = mediaLayer({ ...clip, scenes: [...clip.scenes, ...made] }, m, `${m.name.replace(/\.[a-z0-9]+$/i, "")}-${i + 1}`);
+        layer.label = `${m.name.replace(/\.[a-z0-9]+$/i, "")} · ${i + 1}`;
+        if (marks[i] > 0) layer.trim = { in: round(marks[i]) };
+        if (m.audio) layer.volume = 1;
+        made.push({ id: freshId({ ...clip, scenes: [...clip.scenes, ...made] }, `shot-${i + 1}`), label: `Сцена ${i + 1}`, duration: Math.max(0.1, round(marks[i + 1] - marks[i], 2)), background: clip.background ?? "#080808", layers: [layer] });
+      }
+      if (fresh) clip.scenes = made;
+      else clip.scenes.splice(clip.scenes.findIndex((sc) => sc.id === S.sceneId) + 1, 0, ...made);
+      S.sceneId = made[0].id;
+      S.sel = null;
+    });
+    job.state = "done";
+    job.progress = 1;
+    job.note = cuts.length ? `Найдено склеек: ${cuts.length}. Видео разложено на ${cuts.length + 1} сцен.` : "Склеек не нашлось: видео добавлено одной сценой. Разрезать вручную — клавиша S.";
+    job.doneNote = job.note;
+    S.leftTab = "layers";
+    drawWelcome();
+    drawLeft();
+    fitZoom();
+  } catch (err) {
+    job.state = job.stopped ? "stopped" : "failed";
+    job.error = job.stopped ? "Остановлено." : `Не получилось: ${err?.message ?? err}`;
+  }
+  drawJobs();
 }
 
 // Recording a tab: the browser asks which one, the person shows their site there, and the take becomes a scene
@@ -968,6 +1025,10 @@ function removeSelected() {
 
 function drawRight() {
   const body = $("rightBody");
+  $("rightTabs").hidden = !PROJECT;
+  for (const b of $("rightTabs").children) b.classList.toggle("on", b.dataset.tab === S.rightTab);
+  $("aiDot").hidden = !S.cards.some((c) => c.state === "running" || c.state === "ready" || c.state === "question");
+  if (PROJECT && S.rightTab === "ai") return void body.replaceChildren(...cardsView());
   const f = selLayer();
   if (f) body.replaceChildren(...layerProps(f.layer, f.scene));
   else if (S.sel?.type === "scene") body.replaceChildren(...sceneProps(findScene(S.clip, S.sel.id)));
@@ -1051,6 +1112,35 @@ function layerProps(layer, scene) {
         check("Прописными", () => layer.uppercase, (v) => (v ? (layer.uppercase = true) : delete layer.uppercase)),
       ),
     );
+    const an = () => layer.animate ?? {};
+    out.push(
+      group(
+        "Появление по частям",
+        choice("Резать", () => layer.animate?.by ?? "none", (v) => (v === "none" ? delete layer.animate : (layer.animate = { type: "up", ...an(), by: v })), ["none", ...TEXT_UNITS], { none: "Целиком", ...UNIT_NAME }),
+        ...(layer.animate
+          ? [
+              choice("Как", () => an().type ?? "up", (v) => (layer.animate = { ...an(), type: v }), TEXT_MOTIONS, MOTION_NAME),
+              num("Шаг", () => an().stagger ?? (an().by === "letter" ? 0.03 : an().by === "word" ? 0.08 : 0.14), (v) => (layer.animate = { ...an(), stagger: v }), { min: 0, max: 2, step: 0.01, unit: "с" }),
+              num("Каждая", () => an().duration ?? 0.5, (v) => (layer.animate = { ...an(), duration: v }), { min: 0.05, max: 5, step: 0.05, unit: "с" }),
+            ]
+          : []),
+      ),
+    );
+    const cn = () => layer.count ?? {};
+    out.push(
+      group(
+        "Число-счётчик",
+        check("Считать число в тексте", () => !!layer.count, (v) => { if (v) { layer.count = { from: 0, to: 100 }; if (!layer.text.includes("{n}")) layer.text = "{n}"; } else { layer.text = layer.text.replace("{n}", String(layer.count?.to ?? "")); delete layer.count; } }),
+        ...(layer.count
+          ? [
+              field("От и до", h("div", { class: "pair" }, h("input", { type: "number", step: "any", value: cn().from ?? 0, oninput: (e) => liveEdit("Счётчик", () => (layer.count = { ...cn(), from: Number(e.target.value) || 0 })), onchange: endLive }), h("input", { type: "number", step: "any", value: cn().to, oninput: (e) => liveEdit("Счётчик", () => (layer.count = { ...cn(), to: Number(e.target.value) || 0 })), onchange: endLive }))),
+              num("Знаков после", () => cn().decimals ?? 0, (v) => (layer.count = { ...cn(), decimals: Math.round(v) }), { min: 0, max: 4, step: 1 }),
+              num("Считает", () => cn().duration ?? Math.min(span.duration, 1.5), (v) => (layer.count = { ...cn(), duration: v }), { min: 0.1, max: 30, step: 0.1, unit: "с" }),
+              h("div", { class: "hint small" }, "В тексте число стоит на месте {n}: «{n}%», «+{n} клиентов»."),
+            ]
+          : []),
+      ),
+    );
     if (layer.font && !["Instrument Sans"].includes(layer.font) && !(S.clip.fonts ?? []).some((f) => (typeof f === "string" ? f : f.family) === layer.font))
       out.push(h("div", { class: "status warn" }, `Шрифта «${layer.font}» нет в клипе. `, h("button", { class: "ghost", onclick: () => edit("Шрифт добавлен", (clip) => (clip.fonts = [...(clip.fonts ?? []), layer.font])) }, "Подключить из Google Fonts")));
   }
@@ -1066,7 +1156,8 @@ function layerProps(layer, scene) {
       ),
     );
   }
-  if (layer.kind === "shape") out.push(group("Фигура", color("Цвет", () => layer.fill ?? "#7548d9", (v) => (layer.fill = v))));
+  if (layer.kind === "shape") out.push(group("Фигура", choice("Форма", () => layer.shape ?? "rect", (v) => (v === "rect" ? delete layer.shape : (layer.shape = v)), SHAPES, { rect: "Прямоугольник", ellipse: "Круг или овал" }), color("Цвет", () => layer.fill ?? "#7548d9", (v) => (layer.fill = v))));
+  if (layer.kind === "site" && PROJECT) out.push(siteGroup(layer));
 
   const placing = [];
   if (layer.kind !== "text") {
@@ -1120,6 +1211,61 @@ function moveFields(layer) {
   const part = (side, key, dflt) => h("input", { type: "number", step: key === "scale" ? 0.01 : 0.5, value: layer.move[side]?.[key] ?? dflt, title: `${side === "from" ? "В начале" : "В конце"}: ${key === "scale" ? "масштаб" : key.toUpperCase() + ", %"}`, oninput: (e) => liveEdit("Наезд", () => (layer.move[side] = { ...(layer.move[side] ?? {}), [key]: Number(e.target.value) || 0 })), onchange: endLive });
   out.push(field("Масштаб", h("div", { class: "pair" }, part("from", "scale", 1), part("to", "scale", 1))), field("Сдвиг X", h("div", { class: "pair" }, part("from", "x", 0), part("to", "x", 0))), field("Сдвиг Y", h("div", { class: "pair" }, part("from", "y", 0), part("to", "y", 0))), choice("Кривая", () => layer.move.ease ?? "inOut", (v) => (layer.move.ease = v), EASES, EASE_NAME), h("div", { class: "hint small" }, "Слева — в начале слоя, справа — в конце."));
   return out;
+}
+
+const VIEWPORTS = { "1920×1080": { width: 1920, height: 1080 }, "1440×900": { width: 1440, height: 900 }, "1280×800": { width: 1280, height: 800 }, "Планшет 834×1194": { width: 834, height: 1194, scale: 2 }, "Телефон 390×844": { width: 390, height: 844, scale: 3 } };
+
+function siteGroup(layer) {
+  const job = S.sjobs.find((j) => j.kind === "record" && j.layerId === layer.id && j.state === "running");
+  const vpName = Object.entries(VIEWPORTS).find(([, v]) => v.width === (layer.viewport?.width ?? 1920) && v.height === (layer.viewport?.height ?? 1080))?.[0] ?? "1920×1080";
+  const actions = layer.actions ?? [];
+  const setAct = (i, patch) => liveEdit("Сценарий записи", () => (layer.actions[i] = { ...layer.actions[i], ...patch }));
+  const rows = actions.map((a, i) => {
+    let param = h("span", {});
+    if (a.do === "scroll") param = h("input", { value: a.to ?? "", placeholder: "bottom, 1200, #section", title: "Куда: пиксели, bottom, top или CSS-селектор", oninput: (e) => setAct(i, { to: /^\d+(\.\d+)?$/.test(e.target.value.trim()) ? Number(e.target.value) : e.target.value.trim() }), onchange: endLive });
+    else if (a.do === "wheel") param = h("input", { type: "number", value: a.by ?? 1000, title: "На сколько пикселей", oninput: (e) => setAct(i, { by: Number(e.target.value) || 0 }), onchange: endLive });
+    else if (a.do === "move" || a.do === "click") param = h("input", { value: Array.isArray(a.to) ? a.to.join(", ") : (a.to ?? ""), placeholder: a.do === "click" ? "селектор (или где курсор)" : "селектор или x, y", oninput: (e) => { const v = e.target.value.trim(); const xy = /^(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)$/.exec(v); setAct(i, { to: xy ? [Number(xy[1]), Number(xy[3])] : v || undefined }); }, onchange: endLive });
+    else if (a.do === "type") param = h("input", { value: a.text ?? "", placeholder: "что напечатать", oninput: (e) => setAct(i, { text: e.target.value }), onchange: endLive });
+    else if (a.do === "key") param = h("input", { value: a.key ?? "", placeholder: "Enter", oninput: (e) => setAct(i, { key: e.target.value.trim() }), onchange: endLive });
+    return h(
+      "div",
+      { class: "act" },
+      h("select", { onchange: (e) => edit("Сценарий записи", () => { const d = e.target.value; layer.actions[i] = { do: d, for: a.for ?? 1, ...(d === "scroll" ? { to: "bottom" } : d === "wheel" ? { by: 1200 } : d === "move" ? { to: [960, 540] } : d === "type" ? { text: "" } : d === "key" ? { key: "Enter" } : {}) }; }) }, Object.keys(ACTION_NAME).map((k) => h("option", { value: k, selected: k === a.do }, ACTION_NAME[k]))),
+      param,
+      h("input", { type: "number", min: 0, max: 120, step: 0.1, value: a.for ?? 0, title: "Сколько секунд", oninput: (e) => setAct(i, { for: Math.max(0, Number(e.target.value) || 0) }), onchange: endLive }),
+      h("button", { title: "Убрать действие", onclick: () => edit("Сценарий записи", () => layer.actions.splice(i, 1)) }, "×"),
+    );
+  });
+  const stale = layer.recording && layer.recorded && layer.recorded !== siteKey(layer);
+  const status = job
+    ? h("div", { class: "status" }, job.note || "Готовлюсь к записи…")
+    : !layer.recording
+      ? h("div", { class: "status warn" }, "Ещё не записан. В видео сайт попадёт только после записи.")
+      : stale
+        ? h("div", { class: "status warn" }, "Адрес или сценарий изменились после записи. Запишите ещё раз, чтобы видео им соответствовало.")
+        : h("div", { class: "status ok" }, "Записан. Дальше слой ведёт себя как обычное видео: его можно обрезать, ускорять и кадрировать.");
+  return group(
+    "Сайт",
+    text("Адрес", () => layer.url, (v) => (layer.url = v.trim()), { type: "url", placeholder: "http://localhost:5173" }),
+    choice("Окно", () => vpName, (v) => (layer.viewport = { ...VIEWPORTS[v] }), Object.keys(VIEWPORTS)),
+    check("Показывать курсор", () => layer.cursor, (v) => (v ? (layer.cursor = true) : delete layer.cursor)),
+    h("div", { class: "sub", style: "margin:10px 0 4px" }, `Сценарий · ${secs(actionsDuration(actions))}`),
+    ...rows,
+    h("div", { class: "btnRow" }, h("button", { class: "line", onclick: () => edit("Сценарий записи", () => (layer.actions = [...actions, { do: "wait", for: 1 }])) }, "+ Действие")),
+    status,
+    h("div", { class: "btnRow" }, job ? h("button", { class: "line danger", onclick: () => B.stopJob(job.id) }, "Остановить") : h("button", { class: "primary", disabled: !S.tools.chrome || !S.tools.ffmpeg, onclick: () => record(layer.id) }, layer.recording ? "Записать заново" : "Записать")),
+    h("div", { class: "hint small" }, "Запись идёт покадрово: время страницы подчиняется редактору, поэтому даже тяжёлая WebGL-сцена получается ровной. «Колесо» — для сайтов без настоящей прокрутки."),
+  );
+}
+
+async function record(layerId) {
+  try {
+    await flush();
+    await B.record(layerId);
+    poll();
+  } catch (err) {
+    toast(err.message, true);
+  }
 }
 
 function sceneProps(scene) {
@@ -1185,6 +1331,103 @@ function clipProps() {
   ];
 }
 
+// ---------- only in a project: Claude, the chat bar and the cards ----------
+
+function drawChip() {
+  const chip = $("chip");
+  const scene = curScene();
+  if (S.wholeClip) {
+    chip.className = "chip all";
+    chip.replaceChildren(h("span", {}, "Весь клип"));
+    chip.title = "Запрос о всём клипе. Выберите сцену, чтобы менять только её.";
+  } else {
+    chip.className = "chip";
+    chip.title = "Claude получит только эту сцену";
+    chip.replaceChildren(h("span", {}, scene.label ?? scene.id), h("button", { type: "button", title: "Запрос о всём клипе", onclick: () => ((S.wholeClip = true), drawChip()) }, "×"));
+  }
+}
+
+async function sendChange(request, cardId, sceneId) {
+  try {
+    await flush();
+    await B.change({ sceneId: sceneId === undefined ? (S.wholeClip ? null : curScene().id) : sceneId, layerId: S.sel?.type === "layer" ? S.sel.id : null, request, format: S.format, cardId });
+    S.rightTab = "ai";
+    poll();
+    return true;
+  } catch (err) {
+    toast(err.message, true);
+    return false;
+  }
+}
+
+const STATE_NAME = { running: "Claude работает…", ready: "Готово, посмотрите", kept: "Оставлено", undone: "Отменено", failed: "Не получилось", question: "Нужен ответ" };
+
+function cardsView() {
+  const out = [];
+  if (!S.tools.claude) out.push(h("div", { class: "status warn", style: "margin-bottom:10px" }, "Claude Code не найден в терминале этого компьютера. Правки руками, запись и сборка работают без него. Чтобы подключить, попросите в чате: «подключи uberdesigner clips к Claude Code»."));
+  if (!S.cards.length) out.push(h("div", { class: "hint" }, "Напишите под кадром, что изменить. Claude получит только выбранную сцену, поэтому запрос маленький и быстрый. Результат появится здесь карточкой: его можно оставить, отменить или уточнить."));
+  for (const c of [...S.cards].reverse()) {
+    const job = S.sjobs.find((j) => j.kind === "change" && j.cardId === c.id && j.state === "running");
+    const refine = h("input", { placeholder: c.state === "question" || c.state === "failed" ? "Ответьте или спросите иначе…" : "Не совсем? Напишите, что поправить…", onkeydown: (e) => e.key === "Enter" && e.target.value.trim() && sendChange(e.target.value.trim(), c.id, c.sceneId) });
+    out.push(
+      h(
+        "div",
+        { class: `cardA ${c.state}` },
+        h("div", { class: "ct", style: c.sceneId ? "cursor:pointer" : "", onclick: () => { if (c.sceneId && findScene(S.clip, c.sceneId)) { select({ type: "scene", id: c.sceneId }); S.rightTab = "ai"; drawRight(); } } }, c.state === "running" ? h("i", { class: "spin" }) : h("span", { class: "num" }, String(c.n)), h("b", {}, c.label), h("span", { class: `state ${c.state}` }, STATE_NAME[c.state] ?? "")),
+        c.tries.map((t) => h("div", { class: `try ${t.takenBack ? "back" : ""}` }, h("q", {}, t.request), h("p", {}, t.summary || "Изменено."), t.usage ? h("div", { class: "hint small" }, `${t.usage.seconds} с · ${Math.round((t.usage.input + t.usage.output) / 100) / 10}k токенов${t.takenBack ? " · отменено" : ""}`) : null)),
+        c.pending ? h("div", { class: "try" }, h("q", {}, c.pending), h("p", { class: "dim" }, job?.note || "В очереди…")) : null,
+        c.question ? h("div", { class: "quest" }, c.question) : null,
+        c.error ? h("div", { class: "err" }, c.error) : null,
+        c.state === "running" ? h("div", { class: "btnRow" }, job ? h("button", { class: "line", onclick: () => B.stopJob(job.id) }, "Остановить") : null) : null,
+        c.state === "ready" ? [h("div", { class: "refine" }, refine), h("div", { class: "btnRow" }, h("button", { class: "keep", onclick: () => cardAct("keep", c.id) }, "Оставить"), h("button", { class: "line", onclick: () => cardAct("undo", c.id) }, "Отменить"))] : null,
+        c.state === "kept" ? h("div", { class: "btnRow" }, h("button", { class: "line", onclick: () => cardAct("undo", c.id) }, "Всё-таки отменить")) : null,
+        c.state === "question" || c.state === "failed" ? [h("div", { class: "refine" }, refine), h("div", { class: "btnRow" }, h("button", { class: "line", onclick: () => cardAct("close", c.id) }, "Закрыть"))] : null,
+      ),
+    );
+  }
+  return out;
+}
+
+async function cardAct(what, id) {
+  try {
+    await flush();
+    await B.cardAct(what, id);
+    poll();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+// What the skill's server reports: Claude's cards, recordings, and a clip changed from outside the editor
+let polling = false;
+async function poll() {
+  if (polling || !PROJECT) return;
+  polling = true;
+  try {
+    const st = await B.state();
+    if (st.rev !== S.rev) {
+      S.rev = st.rev;
+      const was = JSON.stringify([S.sjobs, S.cards]);
+      S.sjobs = st.jobs;
+      S.cards = st.cards;
+      S.tools = st.tools;
+      if (st.clipRev > B.clipRev && !S.dragging && !saveTimer) {
+        await saving;
+        // Claude (in the editor or in the chat) changed the clip: take it as it is now, where the person was
+        if (st.clipRev > B.clipRev) await openClip(S.clipId, { keep: true });
+      }
+      if (was !== JSON.stringify([S.sjobs, S.cards])) {
+        drawJobs();
+        if (S.rightTab === "ai" || !document.activeElement?.closest?.("#rightBody")) drawRight();
+      }
+    }
+  } catch {
+    $("saved").textContent = "Нет связи с сервером редактора";
+  } finally {
+    polling = false;
+  }
+}
+
 // ---------- building the video ----------
 
 function openRender() {
@@ -1225,12 +1468,13 @@ async function startExport(formats, quality) {
     for (const [i, format] of formats.entries()) {
       const r = await exportFormat(clip, format, {
         urls: S.urls,
-        blobs: S.blobs,
+        getBlob: (path) => B.blob(S.clipId, path),
         quality,
         job: { get stopped() { return job.stopped; }, progress: (f, note) => ((job.progress = (i + f) / formats.length), (job.note = note), drawJobs()) },
       });
       const name = `${safeName(clip.name).replace(/[.-]+$/, "").replace(/-{2,}/g, "-") || "clip"}-${format.replace(":", "x")}.mp4`;
-      job.files.push({ format, name, url: URL.createObjectURL(r.blob), size: r.blob.size, note: r.wantedSound && !r.sound ? "без звука: этот браузер не кодирует звук" : r.sound === "opus" ? "звук в Opus: в QuickTime может молчать" : "" });
+      const saved = await B.saveRender(name, r.blob);
+      job.files.push({ format, name: saved.name, url: saved.url, path: saved.path, download: saved.download, size: r.blob.size, note: r.wantedSound && !r.sound ? "без звука: этот браузер не кодирует звук" : r.sound === "opus" ? "звук в Opus: в QuickTime может молчать" : "" });
       drawJobs();
     }
     job.state = "done";
@@ -1255,6 +1499,16 @@ function drawJobs() {
         h("div", { class: "note" }, "Перейдите на вкладку с сайтом и покажите его: прокрутите, наведите, нажмите. Потом вернитесь сюда и остановите запись. Лишнее в начале и в конце обрежете на таймлайне."),
       ),
     );
+  for (const j of S.sjobs.filter((x) => x.kind === "record" && (x.state === "running" || !S.seenJobs.has(x.id))))
+    kids.push(
+      h(
+        "div",
+        { class: `job ${j.state}` },
+        h("div", { class: "jt" }, j.state === "running" ? h("i", { class: "spin" }) : null, h("b", {}, j.label), j.state === "running" ? h("button", { class: "ghost", onclick: () => B.stopJob(j.id) }, "Стоп") : h("button", { class: "icon", title: "Закрыть", onclick: () => (S.seenJobs.add(j.id), drawJobs()) }, "×")),
+        j.state === "running" ? h("div", { class: "bar" }, h("i", { style: `width:${Math.round((j.progress ?? 0) * 100)}%` })) : null,
+        h("div", { class: "note" }, j.state === "failed" || j.state === "stopped" ? j.error : j.state === "done" ? "Сайт записан." : j.note || "Жду своей очереди…"),
+      ),
+    );
   for (const j of S.jobs.filter((x) => !x.closed))
     kids.push(
       h(
@@ -1262,8 +1516,8 @@ function drawJobs() {
         { class: `job ${j.state}` },
         h("div", { class: "jt" }, j.state === "running" ? h("i", { class: "spin" }) : null, h("b", {}, j.label), j.state === "running" ? h("button", { class: "ghost", onclick: () => ((j.stopped = true), (j.note = "Останавливаю…"), drawJobs()) }, "Стоп") : h("button", { class: "icon", title: "Закрыть", onclick: () => ((j.closed = true), drawJobs()) }, "×")),
         j.state === "running" ? h("div", { class: "bar" }, h("i", { style: `width:${Math.round((j.progress ?? 0) * 100)}%` })) : null,
-        h("div", { class: "note" }, j.state === "failed" || j.state === "stopped" ? j.error : j.state === "done" ? "Готово. Нажмите на файл, чтобы скачать:" : j.note),
-        j.files.length ? h("div", { class: "files" }, j.files.map((f) => h("a", { href: f.url, download: f.name }, `↓ ${f.format} · ${f.name} · ${(f.size / 1e6).toFixed(1)} МБ${f.note ? ` · ${f.note}` : ""}`))) : null,
+        h("div", { class: "note" }, j.state === "failed" || j.state === "stopped" ? j.error : j.state === "done" ? (j.doneNote ?? (PROJECT ? "Готово. Файлы лежат в папке renders клипа:" : "Готово. Нажмите на файл, чтобы скачать:")) : j.note),
+        j.files.length ? h("div", { class: "files" }, j.files.map((f) => h("a", { href: f.url, download: f.download ? f.name : null, target: f.download ? null : "_blank" }, `${f.download ? "↓" : "▶"} ${f.format} · ${f.name} · ${(f.size / 1e6).toFixed(1)} МБ${f.note ? ` · ${f.note}` : ""}`)), PROJECT ? h("button", { class: "ghost", style: "justify-self:start;margin-left:-9px", onclick: () => B.reveal(j.files[0].path) }, "Показать в папке") : null) : null,
       ),
     );
   box.replaceChildren(...kids);
@@ -1276,39 +1530,54 @@ const flush = async () => {
   await saving;
 };
 
-async function openClip(id) {
-  play(false);
-  for (const url of Object.values(S.urls)) URL.revokeObjectURL(url);
-  S.urls = {};
-  S.blobs = {};
-  S.media = [];
+async function openClip(id, { keep = false } = {}) {
+  if (!keep) play(false);
+  const { clip, media } = await B.open(id);
   S.clipId = id;
-  S.clip = await store.loadClip(id);
-  for (const { blob, clipId, ...item } of await store.listMedia(id)) {
-    S.media.push(item);
-    S.blobs[item.path] = blob;
-    S.urls[item.path] = URL.createObjectURL(blob);
+  S.clip = clip;
+  S.media = media;
+  S.urls = Object.fromEntries(media.map((m) => [m.path, m.url]));
+  if (PROJECT) {
+    S.tools = B.tools;
+    lookAtNewFiles();
   }
-  S.format = S.clip.format;
-  S.sceneId = S.clip.scenes[0].id;
-  S.sel = null;
-  S.t = 0;
+  if (!keep) {
+    S.format = S.clip.format;
+    S.sceneId = S.clip.scenes[0].id;
+    S.sel = null;
+    S.t = 0;
+  }
   S.undo.length = S.redo.length = 0;
+  fixSelection();
   S.problems = problemsOf(S.clip);
-  await store.setLastOpened(id);
   fontsFor = "";
   showStage();
   drawAll();
-  fitZoom();
+  if (!keep) fitZoom();
   loadHistory();
 }
 
+// Files Claude Code put into the project from the chat: the browser looks at each once (size, length, a small
+// picture) and tells the server, so the library shows them like the ones dropped here
+async function lookAtNewFiles() {
+  for (const m of S.media) {
+    if (m.thumb || m.kind === "font" || (m.kind === "audio" && m.duration)) continue;
+    try {
+      const blob = await B.blob(S.clipId, m.path);
+      if (!blob) continue;
+      const info = await inspect(blob, m.kind);
+      Object.assign(m, info);
+      B.setMediaInfo(S.clipId, m.path, info);
+    } catch {
+      m.unplayable = true;
+    }
+  }
+  if (S.leftTab === "media") drawLeft();
+}
+
 async function createClip(name = "Новый клип") {
-  const id = store.newId();
-  const clip = blankClip(name);
-  await store.saveClip(id, clip);
-  await store.recordHistory(id, clip, "Новый клип");
-  S.clips = await store.listClips();
+  const id = await B.createClip(blankClip(name));
+  S.clips = await B.listClips();
   return id;
 }
 
@@ -1318,12 +1587,12 @@ async function onClipsChange(e) {
   if (v === "+new") await openClip(await createClip());
   else if (v === "-delete") {
     if (confirm(`Удалить клип «${S.clip.name}» вместе с его файлами? Вернуть его будет нельзя.`)) {
-      await store.deleteClip(S.clipId);
-      S.clips = await store.listClips();
+      await B.deleteClip(S.clipId);
+      S.clips = await B.listClips();
       await openClip(S.clips[0].id);
     }
   } else await openClip(v);
-  S.clips = await store.listClips();
+  S.clips = await B.listClips();
   drawClips();
 }
 
@@ -1348,6 +1617,8 @@ function drawWelcome() {
 }
 
 function drawAll() {
+  $("chat").hidden = !PROJECT;
+  if (PROJECT) drawChip();
   drawWelcome();
   drawTop();
   drawClips();
@@ -1399,6 +1670,33 @@ function wire() {
     }
   });
   $("clips").addEventListener("change", onClipsChange);
+  $("rightTabs").addEventListener("click", (e) => {
+    const tab = e.target.closest("button")?.dataset.tab;
+    if (!tab) return;
+    S.rightTab = tab;
+    drawRight();
+  });
+  $("model").addEventListener("change", (e) => B.setModel(e.target.value));
+  const ask = $("ask");
+  ask.addEventListener("input", () => {
+    ask.style.height = "auto";
+    ask.style.height = `${Math.min(120, ask.scrollHeight)}px`;
+  });
+  ask.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      $("chat").requestSubmit();
+    }
+  });
+  $("chat").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const request = ask.value.trim();
+    if (!request) return;
+    if (await sendChange(request)) {
+      ask.value = "";
+      ask.style.height = "auto";
+    }
+  });
   $("timeline").addEventListener("pointerdown", (e) => {
     if (e.target === $("tlInner") || e.target.classList.contains("track") || e.target.classList.contains("sceneShade")) scrubDown(e);
   });
@@ -1478,12 +1776,17 @@ async function boot() {
   }
   stage = new Stage($("stage"));
   stage.onMediaReady = () => !S.playing && !seekBusy && seek(S.t, true);
-  S.clips = await store.listClips();
-  let id = await store.lastOpened();
+  S.clips = await B.listClips();
+  let id = await B.lastOpened();
   if (!S.clips.some((c) => c.id === id)) id = S.clips[0]?.id ?? (await createClip());
   wire();
   await openClip(id);
-  store.keep();
+  B.keep();
+  if (PROJECT) {
+    $("model").replaceChildren(...(B.models ?? []).map((m) => h("option", { value: m, selected: m === B.settings?.model }, m)));
+    await poll();
+    setInterval(poll, 800);
+  }
   window.__clips = { S, stage, upload, startExport }; // for looking inside from the console
 }
 

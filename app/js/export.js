@@ -25,7 +25,7 @@ async function videoConfig(width, height, fps, quality) {
 }
 
 // Every sound of the clip mixed into one buffer, or null when the clip is silent
-async function mixSound(clip, format, blobs, onNote) {
+async function mixSound(clip, format, urls, getBlob, onNote) {
   const total = totalDuration(clip);
   const plan = [];
   for (const a of clip.audio ?? []) plan.push({ src: a.src, at: a.start ?? 0, from: a.trimIn ?? 0, len: a.duration ?? total - (a.start ?? 0), volume: a.volume ?? 1, speed: 1, fadeIn: a.fadeIn ?? 0, fadeOut: a.fadeOut ?? 0 });
@@ -38,7 +38,7 @@ async function mixSound(clip, format, blobs, onNote) {
       plan.push({ src: layerSource(L), at: starts[i] + span.start, from: L.trim?.in ?? 0, len: Math.min(span.duration, sceneDuration(scene) - span.start), volume: L.volume, speed: L.speed ?? 1, fadeIn: 0.03, fadeOut: 0.03 });
     }
   });
-  const live = plan.filter((p) => p.volume > 0 && p.len > 0.02 && p.at < total && blobs[p.src]);
+  const live = plan.filter((p) => p.volume > 0 && p.len > 0.02 && p.at < total && urls[p.src]);
   if (!live.length) return null;
   onNote?.("Свожу звук…");
   const RATE = 48000;
@@ -48,7 +48,7 @@ async function mixSound(clip, format, blobs, onNote) {
   for (const p of live) {
     if (!decoded.has(p.src)) {
       try {
-        decoded.set(p.src, await ctx.decodeAudioData(await blobs[p.src].arrayBuffer()));
+        decoded.set(p.src, await ctx.decodeAudioData(await (await getBlob(p.src)).arrayBuffer()));
       } catch {
         decoded.set(p.src, null); // a video with no sound track, or a file the browser can't decode
       }
@@ -114,7 +114,7 @@ async function encodeSound(buffer, mp4) {
 }
 
 // Build one format. job: { stopped, progress(fraction, note) }. Returns { blob, width, height, sound }.
-export async function exportFormat(clip, format, { urls, blobs, quality = "high", job }) {
+export async function exportFormat(clip, format, { urls, getBlob, quality = "high", job }) {
   if (!canExport()) throw new Error("Этот браузер не умеет собирать видео. Откройте редактор в Chrome или Edge.");
   const { width, height } = frameSize(format);
   const fps = clip.fps;
@@ -153,7 +153,7 @@ export async function exportFormat(clip, format, { urls, blobs, quality = "high"
     stage.dispose();
   }
   let sound = null;
-  const mix = await mixSound(clip, format, blobs, (note) => job.progress(1, `${format} · ${note}`));
+  const mix = await mixSound(clip, format, urls, getBlob, (note) => job.progress(1, `${format} · ${note}`));
   if (mix) sound = await encodeSound(mix, mp4);
   return { blob: mp4.finish(), width, height, sound, wantedSound: !!mix };
 }

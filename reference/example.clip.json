@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "name": "Монтаж без боли — reel",
+  "fps": 30,
+  "format": "16:9",
+  "formats": [
+    "16:9",
+    "9:16"
+  ],
+  "background": "#0b0b0f",
+  "facts": [
+    "A 9-second reel for the club: a claim, a number, a piece of footage.",
+    "One typeface, white on near-black with one violet accent. Type comes in word by word; scenes slide up.",
+    "Footage is shown as a rounded card between graphic scenes, never full bleed."
+  ],
+  "fonts": [],
+  "scenes": [
+    {
+      "id": "claim",
+      "label": "Тезис",
+      "duration": 3,
+      "background": "#0b0b0f",
+      "layers": [
+        {
+          "id": "claim-text",
+          "kind": "text",
+          "text": "Дизайнеры тратят\nна монтаж часы",
+          "size": 130,
+          "weight": 600,
+          "color": "#ffffff",
+          "animate": {
+            "by": "word",
+            "type": "up",
+            "stagger": 0.09,
+            "duration": 0.6
+          },
+          "exit": {
+            "type": "fade",
+            "duration": 0.3
+          },
+          "formats": {
+            "9:16": {
+              "size": 96
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "stat",
+      "label": "Цифра",
+      "duration": 3.5,
+      "background": "#7548d9",
+      "transition": {
+        "type": "slide-up",
+        "duration": 0.5
+      },
+      "layers": [
+        {
+          "id": "stat-num",
+          "kind": "text",
+          "text": "{n}%",
+          "size": 300,
+          "weight": 700,
+          "color": "#ffffff",
+          "x": -22,
+          "y": -4,
+          "maxWidth": 50,
+          "count": {
+            "from": 0,
+            "to": 87,
+            "duration": 1.6
+          },
+          "enter": {
+            "type": "fade",
+            "duration": 0.3
+          },
+          "formats": {
+            "9:16": {
+              "x": 0,
+              "y": -22,
+              "size": 260,
+              "maxWidth": 84
+            }
+          }
+        },
+        {
+          "id": "stat-label",
+          "kind": "text",
+          "text": "роликов собирают\nв последний вечер",
+          "size": 44,
+          "weight": 500,
+          "align": "left",
+          "x": -19,
+          "y": 16,
+          "maxWidth": 44,
+          "start": 0.5,
+          "animate": {
+            "by": "line",
+            "type": "up"
+          },
+          "formats": {
+            "9:16": {
+              "x": 0,
+              "y": -6,
+              "align": "center",
+              "maxWidth": 84
+            }
+          }
+        },
+        {
+          "id": "bar-1",
+          "kind": "shape",
+          "fill": "#ffffff55",
+          "box": {
+            "w": 5,
+            "h": 22
+          },
+          "radius": 14,
+          "x": 18,
+          "y": 9,
+          "start": 0.3,
+          "enter": {
+            "type": "grow-y",
+            "duration": 0.7,
+            "ease": "expoOut"
+          },
+          "formats": {
+            "9:16": {
+              "x": -22,
+              "y": 24,
+              "box": {
+                "w": 12,
+                "h": 10
+              }
+            }
+          }
+        },
+        {
+          "id": "bar-2",
+          "kind": "shape",
+          "fill": "#ffffff99",
+          "box": {
+            "w": 5,
+            "h": 34
+          },
+          "radius": 14,
+          "x": 25,
+          "y": 3,
+          "start": 0.42,
+          "enter": {
+            "type": "grow-y",
+            "duration": 0.7,
+            "ease": "expoOut"
+          },
+          "formats": {
+            "9:16": {
+              "x": 0,
+              "y": 21,
+              "box": {
+                "w": 12,
+                "h": 16
+              }
+            }
+          }
+        },
+        {
+          "id": "bar-3",
+          "kind": "shape",
+          "fill": "#ffffff",
+          "box": {
+            "w": 5,
+            "h": 52
+          },
+          "radius": 14,
+          "x": 32,
+          "y": -6,
+          "start": 0.54,
+          "enter": {
+            "type": "grow-y",
+            "duration": 0.7,
+            "ease": "expoOut"
+          },
+          "formats": {
+            "9:16": {
+              "x": 22,
+              "y": 17,
+              "box": {
+                "w": 12,
+                "h": 24
+              }
+            }
+          }
+        },
+        {
+          "id": "dot",
+          "kind": "shape",
+          "shape": "ellipse",
+          "fill": "#0b0b0f",
+          "box": {
+            "w": 2.2,
+            "h": 3.9
+          },
+          "x": 32,
+          "y": -36,
+          "start": 1.2,
+          "enter": {
+            "type": "scale",
+            "duration": 0.4,
+            "ease": "backOut"
+          },
+          "formats": {
+            "9:16": {
+              "hidden": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "footage",
+      "label": "Видео",
+      "duration": 2.5,
+      "transition": {
+        "type": "fade",
+        "duration": 0.4
+      },
+      "layers": [
+        {
+          "id": "footage-video",
+          "kind": "video",
+          "src": "media/footage.mp4",
+          "trim": {
+            "in": 1
+          },
+          "box": {
+            "w": 86,
+            "h": 80
+          },
+          "radius": 36,
+          "y": -3,
+          "enter": {
+            "type": "scale",
+            "duration": 0.6
+          },
+          "formats": {
+            "9:16": {
+              "box": {
+                "w": 90,
+                "h": 30
+              }
+            }
+          }
+        },
+        {
+          "id": "footage-cap",
+          "kind": "text",
+          "text": "Реальное видео между графикой",
+          "size": 36,
+          "y": 43,
+          "start": 0.4,
+          "animate": {
+            "by": "letter",
+            "type": "fade",
+            "stagger": 0.02
+          },
+          "formats": {
+            "9:16": {
+              "y": 22
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "audio": [
+    {
+      "id": "music",
+      "src": "media/track.mp3",
+      "volume": 0.5,
+      "fadeIn": 0.3,
+      "fadeOut": 1
+    }
+  ]
+}
