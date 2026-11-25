@@ -11,7 +11,24 @@ One codebase, two ways to use it:
 - **A plain website.** The same editor page without Claude: the clip is kept in the browser. This is what is
   deployed on Vercel.
 
-## Install the skill
+## Install
+
+In a Claude Code session, run:
+
+```text
+/plugin install uberdesigner-clips --marketplace yellowpauldesigner-sys/video-editor
+```
+
+That one line works on Claude Code 2.1.275 or later. On an earlier version, do it in two steps:
+
+```text
+/plugin marketplace add yellowpauldesigner-sys/video-editor
+/plugin install uberdesigner-clips@uberdesigner
+```
+
+Updates arrive from this repository: `/plugin marketplace update uberdesigner` fetches the newest version.
+
+To install it as a plain skill instead, clone the repository into your skills folder:
 
 ```bash
 git clone https://github.com/yellowpauldesigner-sys/video-editor ~/.claude/skills/uberdesigner-clips
@@ -54,6 +71,7 @@ the editor. ffmpeg is not needed: the editor's page draws the frames and builds 
 | Server | `server/` | Node only. Serves the editor and the media, is the only writer of `clip.json`, keeps History, calls Claude Code |
 | Scripts | `scripts/clips.mjs` | For Claude Code: `new`, `add`, `verify`, `split`, `still`, `render`, `serve` |
 | Skill | `SKILL.md`, `reference/` | The steps Claude follows, and the format reference |
+| Plugin | `.claude-plugin/` | The plugin manifest, and the marketplace entry that lets Claude Code install it from this repository |
 
 `still`, `split` and `render` open the same engine in a headless Chrome (`app/headless.html`), so the frame
 Claude looks at and the file it builds match what the person sees.

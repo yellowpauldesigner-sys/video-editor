@@ -1,0 +1,11 @@
+{
+  "name": "uberdesigner-clips",
+  "displayName": "uberdesigner clips",
+  "description": "A video editor that opens beside the chat: motion typography, counters and simple infographics cut together with real footage. Edit by hand on a timeline, ask Claude to change one scene at a time, build MP4s in several formats.",
+  "author": {
+    "name": "uberdesigner",
+    "url": "https://uberdesigner.ai"
+  },
+  "repository": "https://github.com/yellowpauldesigner-sys/video-editor",
+  "keywords": ["video", "motion", "editor", "design", "reels"]
+}

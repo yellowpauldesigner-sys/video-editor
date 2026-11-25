@@ -18,7 +18,9 @@ The editor's interface and everything the scripts print are in English. Talk to 
 write in, name the editor's buttons as they are on screen, and write the clip's own words (its titles, captions
 and labels) in the language the video is for.
 
-Scripts are in `scripts/` next to this file; run them with Node from anywhere. `<project>` is the clip's folder.
+Scripts are in `scripts/` next to this file; run them with Node from anywhere. When the skill came as a plugin, that
+folder is `${CLAUDE_PLUGIN_ROOT}/scripts`: write that full path in every command, since your shell doesn't start in the
+plugin's folder. `<project>` is the clip's folder.
 The format is in `reference/clip-format.md`, with a complete example in `reference/example.clip.json`. Read the
 format reference once before you write a clip.
 

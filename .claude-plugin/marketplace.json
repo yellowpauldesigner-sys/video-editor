@@ -1,0 +1,15 @@
+{
+  "name": "uberdesigner",
+  "description": "Tools for designers from uberdesigner",
+  "owner": {
+    "name": "uberdesigner",
+    "url": "https://uberdesigner.ai"
+  },
+  "plugins": [
+    {
+      "name": "uberdesigner-clips",
+      "source": "./",
+      "description": "A video editor that opens beside the chat: motion type, numbers and footage on a timeline, changes by Claude one scene at a time, MP4 in several formats."
+    }
+  ]
+}
