@@ -1534,7 +1534,7 @@ async function openClip(id, { keep = false } = {}) {
   if (!keep) play(false);
   const { clip, media } = await B.open(id);
   S.clipId = id;
-  S.clip = clip;
+  S.clip = inEnglish(clip);
   S.media = media;
   S.urls = Object.fromEntries(media.map((m) => [m.path, m.url]));
   if (PROJECT) {
@@ -1555,6 +1555,22 @@ async function openClip(id, { keep = false } = {}) {
   drawAll();
   if (!keep) fitZoom();
   loadHistory();
+}
+
+// A clip started in the editor's first, Russian version carries that version's default names. They were the
+// editor's words, not the person's, so they follow the editor into English; anything the person typed is left alone.
+function inEnglish(clip) {
+  const was = { "Новый клип": "New clip", "Титр": "Title", "Название": "Name", "Новая сцена": "New scene", "Текст": "Text", "Фигура": "Shape", "Сайт": "Site" };
+  const fix = (v) => (typeof v === "string" && was[v]) || v;
+  clip.name = fix(clip.name);
+  for (const scene of clip.scenes ?? []) {
+    scene.label = /^Сцена (\d+)$/.test(scene.label ?? "") ? scene.label.replace("Сцена", "Scene") : fix(scene.label);
+    for (const layer of scene.layers ?? []) {
+      layer.label = fix(layer.label);
+      if (layer.kind === "text" && layer.id === "title-text") layer.text = fix(layer.text);
+    }
+  }
+  return clip;
 }
 
 // Files Claude Code put into the project from the chat: the browser looks at each once (size, length, a small
