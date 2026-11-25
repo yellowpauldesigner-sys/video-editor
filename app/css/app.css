@@ -1,5 +1,5 @@
 /* uberdesigner clips in the browser: the editor. Three columns like the studio (layers, the frame, the picked thing's values),
-   with a timeline under the frame. Colours follow the studio's dark and light themes. */
+   with a timeline under the frame. Colors follow the studio's dark and light themes. */
 
 @font-face {
   font-family: "Clips Sans";
@@ -539,7 +539,7 @@ button:disabled {
   visibility: visible;
 }
 
-/* ---------- centre ---------- */
+/* ---------- center ---------- */
 .center {
   display: flex;
   flex-direction: column;

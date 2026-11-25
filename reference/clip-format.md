@@ -9,7 +9,7 @@ file; nothing else describes the clip. `app/js/model.mjs` is the code that check
 | What | Unit |
 |---|---|
 | Time | seconds |
-| Position (`x`, `y`) | percent of the frame, from its centre. `x: 0, y: 0` is the middle; `y: 40` is near the bottom |
+| Position (`x`, `y`) | percent of the frame, from its center. `x: 0, y: 0` is the middle; `y: 40` is near the bottom |
 | Box (`box.w`, `box.h`), `maxWidth` | percent of the frame |
 | Text `size`, `radius` | design pixels: the frame's short side is 1080 of them in every format, so `size: 96` looks the same weight in 16:9 and 9:16 |
 | `scale` | 1 is as it is |
@@ -101,7 +101,7 @@ A format override may change only placement: `x`, `y`, `scale`, `rotate`, `fit`,
   "color": "#ffffff", "align": "center", "maxWidth": 84, "letterSpacing": -0.02, "lineHeight": 1.05, "uppercase": false }
 ```
 
-`\n` breaks a line. The block is placed by its centre.
+`\n` breaks a line. The block is placed by its center.
 
 **Kinetic type.** `animate` brings the text in piece by piece:
 
@@ -126,7 +126,7 @@ mark as a comma.
 ### shape
 
 `{ "kind": "shape", "shape": "rect", "fill": "#7548d9", "box": { "w": 30, "h": 8 }, "radius": 40 }`: a plate under
-text, a bar, a mask of colour. `shape` is `rect` (the default) or `ellipse`.
+text, a bar, a mask of color. `shape` is `rect` (the default) or `ellipse`.
 
 Infographics are a few of these placed by hand. A bar chart is rects on a common baseline, each with
 `"enter": { "type": "grow-y", "duration": 0.7, "ease": "expoOut" }` and a `start` a little later than the one before:
@@ -167,7 +167,7 @@ layer's Record button in the editor.
 | `wait` | `for` |
 | `scroll` | `to`: pixels from the top, `"bottom"`, `"top"`, or a CSS selector (its top, less `offset`); `for`; `ease` |
 | `wheel` | `by` pixels, `for`, `ease`: wheel events, for pages with no real scroll (a WebGL story driven by the wheel) |
-| `move` | `to`: a selector (its centre) or `[x, y]` in the window; `for`. The page gets real pointer events, so hover states and pointer-driven scenes react |
+| `move` | `to`: a selector (its center) or `[x, y]` in the window; `for`. The page gets real pointer events, so hover states and pointer-driven scenes react |
 | `click` | `to` (optional: else where the pointer is), `for` |
 | `type` | `text`, `for` |
 | `key` | `key`: `Enter`, `Escape`, `ArrowDown`… |

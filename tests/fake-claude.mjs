@@ -20,8 +20,8 @@ const grab = (marker) => {
 let answer;
 const scene = grab("The scene to change:");
 const clip = grab("The whole clip:");
-if (mode === "question") answer = { question: "Какой файл поставить?" };
-else if (clip) answer = { summary: "Переименовал клип.", clip: { ...clip, name: `${clip.name} v2` } };
-else if (mode === "bad" && !prompt.includes("It can't be used")) answer = { summary: "Сломал.", scene: { ...scene, duration: -1 } };
-else answer = { summary: "Сделал сцену вдвое короче.", scene: { ...scene, duration: scene.duration / 2 } };
+if (mode === "question") answer = { question: "Which file should go there?" };
+else if (clip) answer = { summary: "Renamed the clip.", clip: { ...clip, name: `${clip.name} v2` } };
+else if (mode === "bad" && !prompt.includes("It can't be used")) answer = { summary: "Broke it.", scene: { ...scene, duration: -1 } };
+else answer = { summary: "Made the scene half as long.", scene: { ...scene, duration: scene.duration / 2 } };
 process.stdout.write(JSON.stringify({ type: "result", is_error: false, result: "```json\n" + JSON.stringify(answer) + "\n```", duration_ms: 1200, total_cost_usd: 0.01, usage: { input_tokens: 900, output_tokens: 300 } }));

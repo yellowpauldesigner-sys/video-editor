@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Монтаж без боли — reel",
+  "name": "Editing without the pain — reel",
   "fps": 30,
   "format": "16:9",
   "formats": [
@@ -17,14 +17,14 @@
   "scenes": [
     {
       "id": "claim",
-      "label": "Тезис",
+      "label": "Claim",
       "duration": 3,
       "background": "#0b0b0f",
       "layers": [
         {
           "id": "claim-text",
           "kind": "text",
-          "text": "Дизайнеры тратят\nна монтаж часы",
+          "text": "Designers spend\nhours on editing",
           "size": 130,
           "weight": 600,
           "color": "#ffffff",
@@ -48,7 +48,7 @@
     },
     {
       "id": "stat",
-      "label": "Цифра",
+      "label": "Number",
       "duration": 3.5,
       "background": "#7548d9",
       "transition": {
@@ -87,7 +87,7 @@
         {
           "id": "stat-label",
           "kind": "text",
-          "text": "роликов собирают\nв последний вечер",
+          "text": "of reels are cut\nthe night before",
           "size": 44,
           "weight": 500,
           "align": "left",
@@ -219,7 +219,7 @@
     },
     {
       "id": "footage",
-      "label": "Видео",
+      "label": "Footage",
       "duration": 2.5,
       "transition": {
         "type": "fade",
@@ -255,7 +255,7 @@
         {
           "id": "footage-cap",
           "kind": "text",
-          "text": "Реальное видео между графикой",
+          "text": "Real footage between the graphics",
           "size": 36,
           "y": 43,
           "start": 0.4,

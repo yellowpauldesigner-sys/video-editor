@@ -83,7 +83,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
   };
   const fail = (job, err) => {
     job.state = job.stopped ? "stopped" : "failed";
-    job.error = job.stopped ? "Остановлено." : String(err?.message ?? err);
+    job.error = job.stopped ? "Stopped." : String(err?.message ?? err);
     job.endedAt = Date.now();
     bump();
   };
@@ -113,14 +113,14 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
   function startRecord(layerId) {
     const clip = readClip(p);
     const found = findLayer(clip, layerId);
-    if (!found || found.layer.kind !== "site") throw new Error("Записать можно только слой-сайт.");
-    if (jobs.some((j) => j.kind === "record" && j.layerId === layerId && j.state === "running")) throw new Error("Этот слой уже записывается.");
+    if (!found || found.layer.kind !== "site") throw new Error("Only a site layer can be recorded.");
+    if (jobs.some((j) => j.kind === "record" && j.layerId === layerId && j.state === "running")) throw new Error("This layer is already being recorded.");
     const layer = found.layer;
-    const job = newJob("record", `Запись: ${layer.label ?? layer.id}`, { layerId });
+    const job = newJob("record", `Recording: ${layer.label ?? layer.id}`, { layerId });
     const rel = `media/recordings/${layer.id}.mp4`;
     inChrome(async () => {
       try {
-        if (job.stopped) throw new Error("Остановлено.");
+        if (job.stopped) throw new Error("Stopped.");
         const info = await recordSite(layer, layer.fps ?? clip.fps, join(p.root, rel), { get stopped() { return job.stopped; }, set onStop(fn) { job.onStop = fn; }, progress: job.progressFn });
         // the layer now plays its recording; the clip may have changed while it was being made
         const now = readClip(p);
@@ -129,7 +129,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
           again.layer.recording = rel;
           again.layer.recorded = siteKey(layer);
           delete again.layer.trim;
-          await save(now, "record", `Записан сайт: ${layer.label ?? layer.id}`);
+          await save(now, "record", `Site recorded: ${layer.label ?? layer.id}`);
         }
         finish(job, { path: rel, ...info });
       } catch (err) {
@@ -152,20 +152,20 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
 
   async function startChange({ sceneId, layerId, request, format, cardId }) {
     request = String(request ?? "").trim();
-    if (!request) throw new Error("Напишите, что изменить.");
-    if (request.length > 4000) throw new Error("Запрос слишком длинный (больше 4000 знаков).");
+    if (!request) throw new Error("Say what to change.");
+    if (request.length > 4000) throw new Error("The request is too long (over 4000 characters).");
     const clip = readClip(p);
-    if (sceneId && !findScene(clip, sceneId)) throw new Error("Этой сцены уже нет в клипе.");
+    if (sceneId && !findScene(clip, sceneId)) throw new Error("That scene is no longer in the clip.");
     const running = jobs.filter((j) => j.kind === "change" && j.state === "running");
-    if (running.length >= 3) throw new Error("Уже идут три изменения. Дождитесь, пока одно закончится.");
+    if (running.length >= 3) throw new Error("Three changes are already running. Wait for one to finish.");
     const cards = readCards(p);
-    if (cards.some((c) => c.state === "running" && (c.sceneId ?? null) === (sceneId ?? null) && c.id !== cardId)) throw new Error("Для этой части уже идёт изменение. Дождитесь его.");
-    if (!sceneId && cards.some((c) => c.state === "running")) throw new Error("Изменение всего клипа идёт одно, без других. Дождитесь остальных.");
+    if (cards.some((c) => c.state === "running" && (c.sceneId ?? null) === (sceneId ?? null) && c.id !== cardId)) throw new Error("A change to this part is already running. Wait for it.");
+    if (!sceneId && cards.some((c) => c.state === "running")) throw new Error("A whole-clip change runs alone. Wait for the others to finish.");
     let card = cardId ? cardById(cards, cardId) : null;
-    if (cardId && !card) throw new Error("Этой карточки больше нет.");
-    if (card && (card.sceneId ?? null) !== (sceneId ?? null)) throw new Error("Карточка относится к другой части клипа.");
+    if (cardId && !card) throw new Error("That card is gone.");
+    if (card && (card.sceneId ?? null) !== (sceneId ?? null)) throw new Error("That card is about another part of the clip.");
     if (!card) {
-      card = { id: `c${Date.now().toString(36)}`, n: (cards.reduce((m, c) => Math.max(m, c.n ?? 0), 0) || 0) + 1, sceneId: sceneId ?? null, layerId: layerId ?? null, label: sceneId ? (findScene(clip, sceneId).label ?? sceneId) : "Весь клип", tries: [], createdAt: Date.now() };
+      card = { id: `c${Date.now().toString(36)}`, n: (cards.reduce((m, c) => Math.max(m, c.n ?? 0), 0) || 0) + 1, sceneId: sceneId ?? null, layerId: layerId ?? null, label: sceneId ? (findScene(clip, sceneId).label ?? sceneId) : "Whole clip", tries: [], createdAt: Date.now() };
       cards.push(card);
     }
     card.state = "running";
@@ -183,17 +183,17 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
         const prompt = buildPrompt({ clip, scene, layerId, request, media, tries, format });
         const system = scene ? sceneSystem() : clipSystem();
         const handle = { get stopped() { return job.stopped; }, set onStop(fn) { job.onStop = fn; } };
-        job.progressFn(0.1, "Claude думает…");
+        job.progressFn(0.1, "Claude is thinking…");
         let { answer, usage } = await askClaude(system, prompt, { model, job: handle });
         const place = (ans) => {
           // The answer in the clip as it is now: other scenes may have changed while Claude worked
           const now = readClip(p);
           if (scene) {
-            if (!ans.scene || typeof ans.scene !== "object") throw new Error("В ответе нет сцены.");
-            if (ans.scene.id !== scene.id) throw new Error(`Сцена в ответе называется "${ans.scene.id}", а менялась "${scene.id}".`);
+            if (!ans.scene || typeof ans.scene !== "object") throw new Error("The answer has no scene.");
+            if (ans.scene.id !== scene.id) throw new Error(`The scene in the answer is "${ans.scene.id}", but "${scene.id}" was the one to change.`);
             const i = now.scenes.findIndex((s) => s.id === scene.id);
-            if (i < 0) throw new Error("Пока Claude работал, эту сцену убрали из клипа. Ничего не изменено.");
-            if (!sameJson(now.scenes[i], scene)) throw new Error("Пока Claude работал, эту сцену изменили вручную. Ничего не изменено: отправьте запрос ещё раз.");
+            if (i < 0) throw new Error("While Claude worked, this scene was removed from the clip. Nothing was changed.");
+            if (!sameJson(now.scenes[i], scene)) throw new Error("While Claude worked, this scene was changed by hand. Nothing was changed: send the request again.");
             // a recording belongs to the person's Record button, never to an answer
             for (const l of ans.scene.layers ?? []) {
               const was = scene.layers.find((o) => o.id === l.id);
@@ -210,8 +210,8 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
             now.scenes[i] = ans.scene;
             return { next: now, before: scene, after: ans.scene };
           }
-          if (!ans.clip || typeof ans.clip !== "object") throw new Error("В ответе нет клипа.");
-          if (!sameJson(now, clip)) throw new Error("Пока Claude работал, клип изменили вручную. Ничего не изменено: отправьте запрос ещё раз.");
+          if (!ans.clip || typeof ans.clip !== "object") throw new Error("The answer has no clip.");
+          if (!sameJson(now, clip)) throw new Error("While Claude worked, the clip was changed by hand. Nothing was changed: send the request again.");
           return { next: { ...ans.clip, version: 1 }, before: clip, after: { ...ans.clip, version: 1 } };
         };
         if (answer.question) {
@@ -223,24 +223,24 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
           });
           return finish(job, { question: true });
         }
-        job.progressFn(0.8, "Проверяю ответ…");
+        job.progressFn(0.8, "Checking the answer…");
         let placed = place(answer);
         let errors = problems(p, placed.next);
         if (errors.length) {
           // one more call with what was wrong, as the studio does after a failed check
-          job.progressFn(0.85, "Исправляю ответ…");
+          job.progressFn(0.85, "Fixing the answer…");
           const again = await askClaude(system, `${prompt}\n\nYour last reply to this was:\n${JSON.stringify(answer)}\n\nIt can't be used, for these reasons:\n${errors.slice(0, 10).map((e) => `- ${e}`).join("\n")}\n\nReply again with the corrected JSON object only.`, { model, job: handle });
           usage = { input: usage.input + again.usage.input, output: usage.output + again.usage.output, costUsd: usage.costUsd + again.usage.costUsd, seconds: usage.seconds + again.usage.seconds };
           answer = again.answer;
           if (answer.question) throw new Error(String(answer.question));
           placed = place(answer);
           errors = problems(p, placed.next);
-          if (errors.length) throw new Error(`Ответ Claude не прошёл проверку:\n${errors.slice(0, 5).join("\n")}`);
+          if (errors.length) throw new Error(`Claude's answer didn't pass the check:\n${errors.slice(0, 5).join("\n")}`);
         }
         if (sameJson(placed.before, placed.after)) {
           updateCard(card.id, (c) => {
             c.state = c.tries.length ? "ready" : "failed";
-            c.error = "Claude ничего не изменил. " + String(answer.summary ?? "");
+            c.error = "Claude changed nothing. " + String(answer.summary ?? "");
             c.pending = null;
           });
           return finish(job, { unchanged: true });
@@ -255,7 +255,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       } catch (err) {
         updateCard(card.id, (c) => {
           c.state = c.tries.some((t) => !t.takenBack) ? "ready" : "failed";
-          c.error = job.stopped ? "Остановлено. Ничего не изменено." : String(err?.message ?? err);
+          c.error = job.stopped ? "Stopped. Nothing was changed." : String(err?.message ?? err);
           c.pending = null;
         });
         fail(job, err);
@@ -268,23 +268,23 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
   async function undoCard(id) {
     const cards = readCards(p);
     const card = cardById(cards, id);
-    if (!card) throw new Error("Этой карточки больше нет.");
+    if (!card) throw new Error("That card is gone.");
     const live = card.tries.filter((t) => !t.takenBack);
-    if (!live.length) throw new Error("В этой карточке нечего отменять.");
+    if (!live.length) throw new Error("This card has nothing to undo.");
     const first = live[0];
     const last = live.at(-1);
     const clip = readClip(p);
     let next;
     if (card.sceneId) {
       const i = clip.scenes.findIndex((s) => s.id === card.sceneId);
-      if (i < 0 || !sameJson(clip.scenes[i], last.after)) throw new Error("После этого изменения сцену меняли ещё. Отменить его отдельно нельзя: вернитесь к нужному моменту через «Историю».");
+      if (i < 0 || !sameJson(clip.scenes[i], last.after)) throw new Error("The scene was changed again after this change, so it can't be undone by itself: go back to the moment you want in History.");
       clip.scenes[i] = first.before;
       next = clip;
     } else {
-      if (!sameJson(clip, last.after)) throw new Error("После этого изменения клип меняли ещё. Отменить его отдельно нельзя: вернитесь к нужному моменту через «Историю».");
+      if (!sameJson(clip, last.after)) throw new Error("The clip was changed again after this change, so it can't be undone by itself: go back to the moment you want in History.");
       next = first.before;
     }
-    await save(next, "undo", `Отмена: ${card.label}`);
+    await save(next, "undo", `Undo: ${card.label}`);
     updateCard(id, (c) => {
       for (const t of c.tries) t.takenBack = true;
       c.state = "undone";
@@ -305,7 +305,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       req.on("data", (c) => {
         size += c.length;
         if (size > limit) {
-          rej(new Error("Слишком большой запрос."));
+          rej(new Error("The request is too large."));
           req.destroy();
         } else chunks.push(c);
       });
@@ -313,7 +313,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
         try {
           res(chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {});
         } catch {
-          rej(new Error("Запрос не читается как JSON."));
+          rej(new Error("The request isn't valid JSON."));
         }
       });
       req.on("error", rej);
@@ -358,12 +358,12 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       const write = !["GET", "HEAD"].includes(req.method);
       if (write) {
         const from = req.headers.origin;
-        if (from && from !== `http://${host}`) return json(res, 403, { error: "Запрос с чужой страницы." });
-        if (req.headers["x-clips-token"] !== p.token) return json(res, 403, { error: "Нет доступа: откройте редактор заново." });
+        if (from && from !== `http://${host}`) return json(res, 403, { error: "A request from another site's page." });
+        if (req.headers["x-clips-token"] !== p.token) return json(res, 403, { error: "No access: open the editor again." });
       } else if (path.startsWith("/__clips/")) {
         // reads of the project are for the studio's own pages, not for another site's script
         const site = req.headers["sec-fetch-site"];
-        if (site && site !== "same-origin" && site !== "none") return json(res, 403, { error: "Запрос с чужой страницы." });
+        if (site && site !== "same-origin" && site !== "none") return json(res, 403, { error: "A request from another site's page." });
       }
 
       if (!write) {
@@ -390,7 +390,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
         if (path === "/__clips/history") return json(res, 200, { versions: listHistory(p).slice().reverse() });
         if (path === "/__clips/history/clip") {
           const clip = versionClip(p, url.searchParams.get("id"));
-          return clip ? json(res, 200, { clip }) : json(res, 404, { error: "Этой версии нет." });
+          return clip ? json(res, 200, { clip }) : json(res, 404, { error: "That version doesn't exist." });
         }
         return void res.writeHead(404).end("Not found");
       }
@@ -398,7 +398,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       if (path === "/__clips/project" && req.method === "PUT") {
         const body = await readBody(req);
         try {
-          const entry = await save(body.clip, "edit", String(body.label ?? "Правка").slice(0, 120));
+          const entry = await save(body.clip, "edit", String(body.label ?? "Edit").slice(0, 120));
           return json(res, 200, { ok: true, clipRev, version: entry.id });
         } catch (err) {
           return json(res, 422, { error: err.message, problems: err.problems ?? [err.message] });
@@ -406,7 +406,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       }
       if (path === "/__clips/media" && req.method === "POST") {
         const name = safeName(url.searchParams.get("name") ?? "file");
-        if (!kindOf(name)) return json(res, 415, { error: `Такой файл клип не использует: ${name}. Подходят видео, картинки, звук и шрифты.` });
+        if (!kindOf(name)) return json(res, 415, { error: `A clip can't use this kind of file: ${name}. It takes video, pictures, sound and fonts.` });
         const target = freeMediaName(p, name);
         try {
           await pipeline(req, createWriteStream(target.file));
@@ -422,7 +422,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       if (path === "/__clips/renders" && req.method === "POST") {
         // a video the editor's page built: it lands in the project's renders/ folder
         const name = safeName(url.searchParams.get("name") ?? "clip.mp4");
-        if (!/\.mp4$/i.test(name)) return json(res, 415, { error: "Сюда сохраняются только MP4." });
+        if (!/\.mp4$/i.test(name)) return json(res, 415, { error: "Only MP4 files are saved here." });
         mkdirSync(p.renders, { recursive: true });
         const tmp = join(p.renders, `.${process.pid}-${Date.now()}.part`);
         try {
@@ -438,23 +438,23 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
       const body = await readBody(req);
       if (path === "/__clips/media/info") {
         const file = mediaFile(p, String(body.path));
-        if (!file || !existsSync(file)) return json(res, 404, { error: "Этого файла нет." });
+        if (!file || !existsSync(file)) return json(res, 404, { error: "That file doesn't exist." });
         writeMediaInfo(p, String(body.path), body.info, Math.round(statSync(file).mtimeMs));
         return json(res, 200, { ok: true });
       }
       if (path === "/__clips/media/remove") {
         const file = mediaFile(p, String(body.path));
-        if (!file || !existsSync(file)) return json(res, 404, { error: "Этого файла нет." });
-        if (mediaUsed(readClip(p)).has(String(body.path))) return json(res, 409, { error: "Этот файл используется в клипе." });
+        if (!file || !existsSync(file)) return json(res, 404, { error: "That file doesn't exist." });
+        if (mediaUsed(readClip(p)).has(String(body.path))) return json(res, 409, { error: "That file is used in the clip." });
         rmSync(file);
         bump();
         return json(res, 200, { ok: true });
       }
       if (path === "/__clips/history/restore") {
         const clip = versionClip(p, body.id);
-        if (!clip) return json(res, 404, { error: "Этой версии нет." });
+        if (!clip) return json(res, 404, { error: "That version doesn't exist." });
         const entry = listHistory(p).find((e) => e.id === body.id);
-        await save(clip, "restore", `Возврат к: ${entry?.label || new Date(entry?.at ?? Date.now()).toLocaleString("ru")}`);
+        await save(clip, "restore", `Back to: ${entry?.label || new Date(entry?.at ?? Date.now()).toLocaleString("en-US")}`);
         return json(res, 200, { ok: true });
       }
       if (path === "/__clips/record") return json(res, 200, { job: jobView(startRecord(String(body.layerId))) });
@@ -502,7 +502,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
         spawn(cmd, args, { stdio: "ignore", detached: true }).on("error", () => {}).unref();
         return json(res, 200, { ok: true });
       }
-      return json(res, 404, { error: "Нет такого действия." });
+      return json(res, 404, { error: "No such action." });
     } catch (err) {
       if (!res.headersSent) json(res, 400, { error: String(err?.message ?? err) });
       else res.destroy();
@@ -535,7 +535,7 @@ export async function start(projectDir, { port = 5320, quiet = false } = {}) {
     const t = toolStatus();
     console.log(`uberdesigner clips · ${readClip(p).name}`);
     console.log(`  ${origin}`);
-    if (!t.claude) console.log("  TELL нет Claude Code в терминале: изменения через Claude в редакторе ждут его");
+    if (!t.claude) console.log("  TELL Claude Code is not in the terminal: changes by Claude inside the editor wait for it");
   }
   return { origin, port: bound, project: p, close: () => (unwatchFile(p.clipFile), server.closeAllConnections?.(), new Promise((r) => server.close(r))), startRecord, jobs };
 }

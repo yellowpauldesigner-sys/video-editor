@@ -30,7 +30,7 @@ export function openProject(dir) {
     history: join(root, ".clips", "history"),
     cache: join(root, ".clips", "cache"),
   };
-  if (!existsSync(p.clipFile)) throw new Error(`Здесь нет clip.json: ${root}. Создайте проект: node scripts/new.mjs <папка>`);
+  if (!existsSync(p.clipFile)) throw new Error(`There is no clip.json here: ${root}. Create a project: node scripts/clips.mjs new <folder>`);
   for (const d of [p.media, p.renders, p.state, p.history, p.cache]) mkdirSync(d, { recursive: true });
   const ignore = join(root, ".gitignore");
   const had = existsSync(ignore) ? readFileSync(ignore, "utf8") : "";
@@ -61,7 +61,7 @@ export function readClip(p) {
   try {
     clip = JSON.parse(readFileSync(p.clipFile, "utf8"));
   } catch (err) {
-    throw new Error(`clip.json не читается как JSON: ${err.message}`);
+    throw new Error(`clip.json isn't valid JSON: ${err.message}`);
   }
   return clip;
 }
@@ -79,7 +79,7 @@ export function problems(p, clip) {
   if (errors.length) return errors;
   for (const [path, who] of mediaUsed(clip)) {
     const file = mediaFile(p, path);
-    if (!file || !existsSync(file)) errors.push(`${who.map((w) => `"${w}"`).join(", ")}: файла ${path} нет в проекте`);
+    if (!file || !existsSync(file)) errors.push(`${who.map((w) => `"${w}"`).join(", ")}: the file ${path} is not in the project`);
   }
   return errors;
 }
@@ -137,8 +137,8 @@ export function writeClip(p, clip, kind, label) {
   if (onDisk) {
     const last = index.at(-1);
     const lastClip = last ? readJson(join(p.history, `${last.id}.json`), null) : null;
-    if (!lastClip) record(p, onDisk, "start", "Как было в начале");
-    else if (JSON.stringify(lastClip) !== JSON.stringify(onDisk)) record(p, onDisk, "outside", "Изменено вне редактора");
+    if (!lastClip) record(p, onDisk, "start", "As it was at the start");
+    else if (JSON.stringify(lastClip) !== JSON.stringify(onDisk)) record(p, onDisk, "outside", "Changed outside the editor");
   }
   writeJson(p.clipFile, clip);
   return record(p, clip, kind, label);
@@ -260,7 +260,7 @@ export async function makePlayable(p, path, onNote) {
   if (PLAYS.includes(info.codec) && [".mp4", ".webm", ".m4v", ".mov"].includes(ext)) return path;
   const ffmpeg = findFfmpeg();
   if (!ffmpeg) return path;
-  onNote?.(`Перевожу ${basename(file)} в формат, который показывает браузер…`);
+  onNote?.(`Converting ${basename(file)} to a format the browser can play…`);
   const name = `${basename(file, extname(file))}.mp4`;
   const target = freeMediaName(p, name === basename(file) ? `${basename(file, ".mp4")}-h264.mp4` : name);
   const r = await run(ffmpeg, ["-y", "-i", file, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p", "-c:v", "libx264", "-preset", "fast", "-crf", "15", "-g", "30", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", target.file], { timeout: 30 * 60_000 });

@@ -130,7 +130,7 @@ export async function recordSite(layer, fps, outFile, job) {
   const scale = vp.scale ?? (vp.width < 800 ? 2 : 1);
   const actions = layer.actions?.length ? layer.actions : [{ do: "wait", for: 4 }];
   const total = actionsDuration(actions);
-  if (total <= 0) throw new Error("У сценария записи нулевая длительность: добавьте действиям время (for).");
+  if (total <= 0) throw new Error("The recording script has no length: give its actions a time (for).");
   const frames = Math.round(total * fps);
   mkdirSync(dirname(outFile), { recursive: true });
   const tmp = join(dirname(outFile), `.recording-${process.pid}.mp4`);
@@ -143,32 +143,32 @@ export async function recordSite(layer, fps, outFile, job) {
   let frame = 0;
   try {
     await tab.send("Page.addScriptToEvaluateOnNewDocument", { source: CLOCK });
-    job.progress(0, "Открываю сайт…");
+    job.progress(0, "Opening the site…");
     const loaded = tab.once("Page.loadEventFired", 45_000);
     const nav = await tab.send("Page.navigate", { url: layer.url });
-    if (nav.errorText) throw new Error(`Сайт не открылся (${layer.url}): ${nav.errorText}. Если это локальный сайт, запустите его сервер.`);
-    if (!(await loaded)) throw new Error(`Сайт не загрузился за 45 секунд: ${layer.url}`);
+    if (nav.errorText) throw new Error(`The site didn't open (${layer.url}): ${nav.errorText}. If it is a local site, start its server.`);
+    if (!(await loaded)) throw new Error(`The site didn't load in 45 seconds: ${layer.url}`);
     await sleep(Math.round((layer.settle ?? 1.5) * 1000)); // fonts, pictures, the first WebGL frames, in real time
-    if (!(await tab.ev("!!window.__rec"))) throw new Error("Не удалось взять время страницы под управление (страница перезагрузилась во время записи).");
+    if (!(await tab.ev("!!window.__rec"))) throw new Error("The page's clock couldn't be taken over (the page reloaded during the recording).");
     await tab.ev("window.__rec.begin()");
     const dt = 1000 / fps;
     const box = layer.scrollIn ? JSON.stringify(layer.scrollIn) : "undefined";
     let mouse = [Math.round(vp.width / 2), Math.round(vp.height / 2)];
     const began = Date.now();
     const shoot = async (scroll) => {
-      if (job.stopped) throw new Error("Остановлено.");
+      if (job.stopped) throw new Error("Stopped.");
       await tab.ev(`window.__rec.frame(${dt}, ${scroll == null ? "null" : JSON.stringify({ y: scroll, box: layer.scrollIn ?? null })})`);
       await enc.write(await tab.shot("jpeg", 96));
       frame++;
       if (frame % 3 === 0) {
         const left = ((Date.now() - began) / frame) * (frames - frame);
-        job.progress(frame / frames, `Записываю · кадр ${frame} из ${frames}${frame > 10 ? ` · осталось ~${Math.max(1, Math.round(left / 1000))} с` : ""}`);
+        job.progress(frame / frames, `Recording · frame ${frame} of ${frames}${frame > 10 ? ` · ~${Math.max(1, Math.round(left / 1000))} s left` : ""}`);
       }
     };
     const point = async (to) => {
       if (Array.isArray(to)) return to;
       const c = await tab.ev(`window.__rec.center(${JSON.stringify(to)})`);
-      if (!c) throw new Error(`На странице нет элемента ${to} (действие сценария записи).`);
+      if (!c) throw new Error(`The page has no element ${to} (an action of the recording script).`);
       return c;
     };
     const moveMouse = async (x, y) => {
@@ -188,7 +188,7 @@ export async function recordSite(layer, fps, outFile, job) {
         else if (a.to === "top") to = 0;
         else {
           to = await tab.ev(`window.__rec.top(${JSON.stringify(a.to)}, ${box})`);
-          if (to == null) throw new Error(`На странице нет элемента ${a.to} (прокрутка в сценарии записи).`);
+          if (to == null) throw new Error(`The page has no element ${a.to} (a scroll in the recording script).`);
           to = Math.max(0, to - (a.offset ?? 0));
         }
         for (let i = 1; i <= n; i++) await shoot(lerp(from, to, ease(a.ease ?? "inOut", i / n)));

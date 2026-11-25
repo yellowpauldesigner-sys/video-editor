@@ -1,91 +1,93 @@
 # uberdesigner clips
 
-**Видеоредактор для дизайнеров: моушн-ролики с типографикой, цифрами и инфографикой вперемежку с реальным видео.
-Монтаж руками в окне редактора, а изменения — через Claude, по одной сцене.**
+**A video editor for designers: motion pieces with typography, numbers and simple infographics, cut together with
+real footage. Edit by hand in the editor's window; ask Claude for changes, one scene at a time.**
 
-Одна кодовая база, два способа пользоваться:
+One codebase, two ways to use it:
 
-- **Скилл для Claude Code.** Claude собирает первый монтаж и открывает редактор на localhost рядом с чатом, как
-  [uberdesigner studio](https://github.com/bogdan239/uberdesigner-studio) открывает редактор сайта. Клип лежит в
-  папке (`clip.json` и `media/`), Claude видит и меняет его.
-- **Обычный сайт.** Та же страница редактора без Claude: клип хранится в браузере. Это то, что выложено на Vercel.
+- **A Claude Code skill.** Claude makes the first cut and opens the editor on localhost beside the chat, the way
+  [uberdesigner studio](https://github.com/bogdan239/uberdesigner-studio) opens its site editor. The clip lives in
+  a folder (`clip.json` and `media/`), so Claude can see it and change it.
+- **A plain website.** The same editor page without Claude: the clip is kept in the browser. This is what is
+  deployed on Vercel.
 
-## Установка скилла
+## Install the skill
 
 ```bash
 git clone https://github.com/yellowpauldesigner-sys/video-editor ~/.claude/skills/uberdesigner-clips
 ```
 
-Затем в Claude Code:
+Then, in Claude Code:
 
 ```text
-сделай в uberdesigner clips ролик на 15 секунд: три тезиса, цифра 87% и это видео между ними
+make a 15-second reel in uberdesigner clips: three claims, the number 87%, and this video between them
 ```
 
-или
+or
 
 ```text
-открой это видео в uberdesigner clips
+open this video in uberdesigner clips
 ```
 
-Нужны Node.js 22+ и Google Chrome. Claude Code в терминале нужен для изменений через Claude внутри редактора.
-ffmpeg не нужен: кадры рисует и видео собирает сама страница редактора.
+It needs Node.js 22 or newer and Google Chrome. Claude Code in the terminal is needed for changes by Claude inside
+the editor. ffmpeg is not needed: the editor's page draws the frames and builds the video itself.
 
-## Что умеет
+## What it does
 
-- **Моушн-типографика.** Текст появляется по словам, строкам или буквам; число считает от и до.
-- **Инфографика.** Полосы, которые растут, точки, плашки — из простых фигур.
-- **Видео, картинки, звук.** Обрезка, скорость, кадрирование, музыка с затуханием.
-- **Готовое видео → сцены.** Редактор находит склейки и раскладывает ролик на сцены.
-- **Таймлайн.** Края тянутся, сцены переставляются, `S` режет, пробел запускает, ⌘Z отменяет шаг.
-- **Форматы.** 16:9, 9:16, 1:1, 4:5 из одного клипа; положение слоя у каждого формата своё.
-- **Изменения через Claude** (в скилле). Запрос несёт одну сцену, ответ приходит карточкой: оставить, отменить,
-  уточнить.
-- **Сборка.** MP4 (H.264) со звуком, прямо в Chrome.
+- **Motion typography.** Text comes in by word, line or letter; a number counts from one value to another.
+- **Infographics.** Bars that grow, dots and plates, built from simple shapes.
+- **Video, pictures, sound.** Trim, speed, crop, music with fades.
+- **A finished video becomes scenes.** The editor finds the cuts and lays the video out as scenes.
+- **A timeline.** Drag edges to trim, drag scenes to reorder, `S` splits, Space plays, ⌘Z steps back.
+- **Formats.** 16:9, 9:16, 1:1 and 4:5 from one clip; each format places a layer its own way.
+- **Changes by Claude** (in the skill). A request carries one scene; the answer arrives as a card to keep, undo or
+  refine.
+- **Building.** MP4 (H.264) with sound, right in Chrome.
 
-## Устройство
+## How it is built
 
-| Часть | Где | Что делает |
+| Piece | Where | What it does |
 |---|---|---|
-| Редактор | `app/` | Статическая страница без сборки: слои, кадр на canvas, таймлайн, свойства, сборка видео через WebCodecs |
-| Формат клипа | `app/js/model.mjs` | Что может быть в `clip.json`, тайминг, проверка. Один файл для страницы, сервера и скриптов |
-| Хранение | `app/js/backend.js` | Единственное место, где режимы различаются: IndexedDB в браузере или сервер скилла |
-| Сервер | `server/` | Только Node. Отдаёт редактор и медиа, единственный пишет `clip.json`, ведёт Историю, вызывает Claude Code |
-| Скрипты | `scripts/clips.mjs` | Для Claude Code: `new`, `add`, `verify`, `split`, `still`, `render`, `serve` |
-| Скилл | `SKILL.md`, `reference/` | Шаги для Claude и описание формата |
+| Editor | `app/` | A static page with no build step: layers, the frame on a canvas, the timeline, properties, and video export through WebCodecs |
+| Clip format | `app/js/model.mjs` | What a `clip.json` may hold, its timing, its checks. One file for the page, the server and the scripts |
+| Storage | `app/js/backend.js` | The only place the two modes differ: IndexedDB in the browser, or the skill's server |
+| Server | `server/` | Node only. Serves the editor and the media, is the only writer of `clip.json`, keeps History, calls Claude Code |
+| Scripts | `scripts/clips.mjs` | For Claude Code: `new`, `add`, `verify`, `split`, `still`, `render`, `serve` |
+| Skill | `SKILL.md`, `reference/` | The steps Claude follows, and the format reference |
 
-`still`, `split` и `render` открывают тот же движок в headless Chrome (`app/headless.html`), поэтому кадр,
-который смотрит Claude, и файл, который он собирает, совпадают с тем, что видит человек.
+`still`, `split` and `render` open the same engine in a headless Chrome (`app/headless.html`), so the frame
+Claude looks at and the file it builds match what the person sees.
 
-**Изменение через Claude.** Сервер запускает `claude -p` без инструментов, в пустой папке, и передаёт краткое
-описание формата, факты клипа, список файлов и JSON одной сцены. Ответ проверяется целиком; при ошибке Claude
-получает её один раз; только потом сцена записывается и появляется точка в Истории.
+**A change by Claude.** The server runs `claude -p` with no tools, in an empty folder, and passes it a short
+description of the format, the clip's facts, the list of files and one scene's JSON. The answer is checked in
+full; if it fails, Claude gets the errors once; only then is the scene written and a point added to History.
 
 ## Vercel
 
-`vercel.json` отдаёт папку `app/` как статический сайт, без сборки.
+`vercel.json` serves the `app/` folder as a static site, with no build.
 
-## Что уходит с компьютера
+## What leaves your computer
 
-- Запросы к Claude из редактора: текст запроса и JSON сцены, через ваш Claude Code.
-- Шрифты Google Fonts, если они названы в клипе.
+- Requests to Claude from the editor: the request text and the scene's JSON, through your own Claude Code.
+- Google Fonts, when a clip names one.
 
-Аналитики нет. Сервер скилла слушает только `127.0.0.1`; изменения принимаются с ключом, который получает только
-страница редактора.
+There is no analytics. The skill's server listens on `127.0.0.1` only, and accepts changes only with a token that
+only the editor's page is given.
 
-## Тесты
+## Tests
 
 ```bash
 node --test tests/*.test.mjs
 ```
 
-Формат клипа и сервер от начала до конца, с подставным Claude (`tests/fake-claude.mjs`). Браузер для них не нужен.
+The clip format, and the server end to end with a stand-in for Claude (`tests/fake-claude.mjs`). They need no
+browser.
 
-## Чего пока нет
+## Not there yet
 
-- Ключевых кадров сложнее одного медленного движения на слой, масок, цветокоррекции.
-- Диаграмм сложнее полос и точек.
-- Формы волны, нарезки под бит, субтитров по речи.
-- Видео в ProRes и HEVC на входе: Chrome их не проигрывает.
+- Keyframes beyond one slow move per layer, masks, color correction.
+- Charts beyond bars and dots.
+- Waveforms, cutting to the beat, captions from speech.
+- ProRes and HEVC video as input: Chrome doesn't play them.
 
-Шрифт Instrument Sans — под SIL Open Font License (`app/fonts/OFL.txt`).
+The typeface, Instrument Sans, is under the SIL Open Font License (`app/fonts/OFL.txt`).

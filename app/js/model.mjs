@@ -3,10 +3,10 @@
 // all use this same file, so they can't disagree about what a clip is.
 
 export const FORMATS = {
-  "16:9": { width: 1920, height: 1080, label: "16:9", hint: "YouTube, Behance, сайт" },
+  "16:9": { width: 1920, height: 1080, label: "16:9", hint: "YouTube, Behance, websites" },
   "9:16": { width: 1080, height: 1920, label: "9:16", hint: "Reels, Shorts, Stories" },
-  "1:1": { width: 1080, height: 1080, label: "1:1", hint: "Лента Instagram, LinkedIn" },
-  "4:5": { width: 1080, height: 1350, label: "4:5", hint: "Лента Instagram, X" },
+  "1:1": { width: 1080, height: 1080, label: "1:1", hint: "Instagram feed, LinkedIn" },
+  "4:5": { width: 1080, height: 1350, label: "4:5", hint: "Instagram feed, X" },
 };
 
 export const LAYER_KINDS = ["video", "image", "text", "shape", "site"];
@@ -215,7 +215,7 @@ export function duplicateScene(clip, sceneId) {
   if (i < 0) return null;
   const copy = structuredClone(clip.scenes[i]);
   copy.id = freshId(clip, `${copy.id}-copy`);
-  copy.label = `${copy.label ?? clip.scenes[i].id} (копия)`;
+  copy.label = `${copy.label ?? clip.scenes[i].id} (copy)`;
   const taken = allIds(clip);
   taken.add(copy.id);
   for (const l of copy.layers) {
@@ -240,148 +240,148 @@ export const isWebAddress = (u) => isStr(u) && /^https?:\/\/[^\s]+$/i.test(u);
 
 function checkMotion(m, where, errors) {
   if (m == null) return;
-  if (!isObj(m)) return errors.push(`${where}: должно быть объектом { type, duration, ease }`);
-  if (m.type != null && !MOTIONS.includes(m.type)) errors.push(`${where}.type: "${m.type}" — нет такого; есть ${MOTIONS.join(", ")}`);
-  if (m.duration != null && !(isNum(m.duration) && m.duration >= 0 && m.duration <= 10)) errors.push(`${where}.duration: число от 0 до 10 секунд`);
-  if (m.ease != null && !EASES.includes(m.ease)) errors.push(`${where}.ease: "${m.ease}" — нет такой; есть ${EASES.join(", ")}`);
+  if (!isObj(m)) return errors.push(`${where}: must be an object { type, duration, ease }`);
+  if (m.type != null && !MOTIONS.includes(m.type)) errors.push(`${where}.type: "${m.type}" is not one of ${MOTIONS.join(", ")}`);
+  if (m.duration != null && !(isNum(m.duration) && m.duration >= 0 && m.duration <= 10)) errors.push(`${where}.duration: a number from 0 to 10 seconds`);
+  if (m.ease != null && !EASES.includes(m.ease)) errors.push(`${where}.ease: "${m.ease}" is not one of ${EASES.join(", ")}`);
 }
 
 function checkPlaced(l, where, errors) {
-  for (const k of ["x", "y"]) if (l[k] != null && !(isNum(l[k]) && Math.abs(l[k]) <= 300)) errors.push(`${where}.${k}: число, в процентах кадра (0 — центр)`);
-  if (l.scale != null && !(isNum(l.scale) && l.scale > 0 && l.scale <= 20)) errors.push(`${where}.scale: число больше 0 (1 — как есть)`);
-  if (l.rotate != null && !isNum(l.rotate)) errors.push(`${where}.rotate: число, в градусах`);
-  if (l.fit != null && !FITS.includes(l.fit)) errors.push(`${where}.fit: "cover" или "contain"`);
-  if (l.box != null && !(isObj(l.box) && isNum(l.box.w) && isNum(l.box.h) && l.box.w > 0 && l.box.h > 0)) errors.push(`${where}.box: { w, h } в процентах кадра`);
-  if (l.size != null && !(isNum(l.size) && l.size > 0 && l.size <= 2000)) errors.push(`${where}.size: размер текста, число больше 0`);
-  if (l.hidden != null && typeof l.hidden !== "boolean") errors.push(`${where}.hidden: true или false`);
+  for (const k of ["x", "y"]) if (l[k] != null && !(isNum(l[k]) && Math.abs(l[k]) <= 300)) errors.push(`${where}.${k}: a number, in percent of the frame (0 is the center)`);
+  if (l.scale != null && !(isNum(l.scale) && l.scale > 0 && l.scale <= 20)) errors.push(`${where}.scale: a number above 0 (1 is as it is)`);
+  if (l.rotate != null && !isNum(l.rotate)) errors.push(`${where}.rotate: a number, in degrees`);
+  if (l.fit != null && !FITS.includes(l.fit)) errors.push(`${where}.fit: "cover" or "contain"`);
+  if (l.box != null && !(isObj(l.box) && isNum(l.box.w) && isNum(l.box.h) && l.box.w > 0 && l.box.h > 0)) errors.push(`${where}.box: { w, h } in percent of the frame`);
+  if (l.size != null && !(isNum(l.size) && l.size > 0 && l.size <= 2000)) errors.push(`${where}.size: the text size, a number above 0`);
+  if (l.hidden != null && typeof l.hidden !== "boolean") errors.push(`${where}.hidden: true or false`);
 }
 
 // Every problem in a clip, in plain words. An empty list means the clip can be saved and rendered.
 export function validate(clip) {
   const errors = [];
-  if (!isObj(clip)) return ["clip.json должен быть объектом"];
-  if (clip.version !== 1) errors.push('version: должно быть 1');
-  if (!isStr(clip.name) || !clip.name.trim()) errors.push("name: название клипа, строка");
-  if (!(isNum(clip.fps) && [24, 25, 30, 50, 60].includes(clip.fps))) errors.push("fps: 24, 25, 30, 50 или 60");
-  if (!FORMATS[clip.format]) errors.push(`format: один из ${Object.keys(FORMATS).join(", ")}`);
-  if (clip.formats != null && !(Array.isArray(clip.formats) && clip.formats.every((f) => FORMATS[f]))) errors.push(`formats: список из ${Object.keys(FORMATS).join(", ")}`);
-  if (clip.facts != null && !(Array.isArray(clip.facts) && clip.facts.every(isStr))) errors.push("facts: список строк");
-  if (clip.fonts != null && !(Array.isArray(clip.fonts) && clip.fonts.every((f) => isStr(f) || (isObj(f) && isStr(f.family) && isMediaPath(f.src))))) errors.push('fonts: список названий Google Fonts или { family, src: "media/…" }');
+  if (!isObj(clip)) return ["clip.json must be an object"];
+  if (clip.version !== 1) errors.push('version: must be 1');
+  if (!isStr(clip.name) || !clip.name.trim()) errors.push("name: the clip's name, a string");
+  if (!(isNum(clip.fps) && [24, 25, 30, 50, 60].includes(clip.fps))) errors.push("fps: 24, 25, 30, 50 or 60");
+  if (!FORMATS[clip.format]) errors.push(`format: one of ${Object.keys(FORMATS).join(", ")}`);
+  if (clip.formats != null && !(Array.isArray(clip.formats) && clip.formats.every((f) => FORMATS[f]))) errors.push(`formats: a list from ${Object.keys(FORMATS).join(", ")}`);
+  if (clip.facts != null && !(Array.isArray(clip.facts) && clip.facts.every(isStr))) errors.push("facts: a list of strings");
+  if (clip.fonts != null && !(Array.isArray(clip.fonts) && clip.fonts.every((f) => isStr(f) || (isObj(f) && isStr(f.family) && isMediaPath(f.src))))) errors.push('fonts: a list of Google Fonts family names or { family, src: "media/…" }');
   if (!Array.isArray(clip.scenes) || !clip.scenes.length) {
-    errors.push("scenes: нужна хотя бы одна сцена");
+    errors.push("scenes: at least one scene is needed");
     return errors;
   }
   const seen = new Set();
   const once = (id, where) => {
-    if (!isStr(id) || !ID.test(id)) errors.push(`${where}.id: строчные латинские буквы, цифры и дефис (сейчас ${JSON.stringify(id)})`);
-    else if (seen.has(id)) errors.push(`${where}.id: "${id}" уже занят — id не повторяются во всём клипе`);
+    if (!isStr(id) || !ID.test(id)) errors.push(`${where}.id: lowercase latin letters, digits and hyphens (it is ${JSON.stringify(id)})`);
+    else if (seen.has(id)) errors.push(`${where}.id: "${id}" is already taken: an id is used once in the whole clip`);
     else seen.add(id);
   };
   clip.scenes.forEach((s, si) => {
     const sw = `scenes[${si}]`;
-    if (!isObj(s)) return errors.push(`${sw}: должно быть объектом`);
+    if (!isObj(s)) return errors.push(`${sw}: must be an object`);
     once(s.id, sw);
-    const sn = isStr(s.id) ? `сцена "${s.id}"` : sw;
-    if (!(isNum(s.duration) && s.duration >= 0.1 && s.duration <= 600)) errors.push(`${sn}: duration — от 0.1 до 600 секунд`);
+    const sn = isStr(s.id) ? `scene "${s.id}"` : sw;
+    if (!(isNum(s.duration) && s.duration >= 0.1 && s.duration <= 600)) errors.push(`${sn}: duration is from 0.1 to 600 seconds`);
     if (s.transition != null) {
-      if (!isObj(s.transition) || !TRANSITIONS.includes(s.transition.type)) errors.push(`${sn}: transition.type — один из ${TRANSITIONS.join(", ")}`);
-      else if (s.transition.duration != null && !(isNum(s.transition.duration) && s.transition.duration >= 0 && s.transition.duration <= 5)) errors.push(`${sn}: transition.duration — от 0 до 5 секунд`);
+      if (!isObj(s.transition) || !TRANSITIONS.includes(s.transition.type)) errors.push(`${sn}: transition.type is one of ${TRANSITIONS.join(", ")}`);
+      else if (s.transition.duration != null && !(isNum(s.transition.duration) && s.transition.duration >= 0 && s.transition.duration <= 5)) errors.push(`${sn}: transition.duration is from 0 to 5 seconds`);
     }
-    if (!Array.isArray(s.layers)) return errors.push(`${sn}: layers — список слоёв (может быть пустым)`);
+    if (!Array.isArray(s.layers)) return errors.push(`${sn}: layers is a list of layers (it may be empty)`);
     s.layers.forEach((l, li) => {
       const lw = `${sn}, layers[${li}]`;
-      if (!isObj(l)) return errors.push(`${lw}: должно быть объектом`);
+      if (!isObj(l)) return errors.push(`${lw}: must be an object`);
       once(l.id, lw);
-      const ln = isStr(l.id) ? `слой "${l.id}"` : lw;
-      if (!LAYER_KINDS.includes(l.kind)) return errors.push(`${ln}: kind — один из ${LAYER_KINDS.join(", ")}`);
-      if (l.start != null && !(isNum(l.start) && l.start >= 0)) errors.push(`${ln}: start — секунды от начала сцены, не меньше 0`);
-      if (l.duration != null && !(isNum(l.duration) && l.duration > 0)) errors.push(`${ln}: duration — больше 0 (или убрать поле: слой идёт до конца сцены)`);
-      if (isNum(l.start) && isNum(s.duration) && l.start >= s.duration) errors.push(`${ln}: начинается (${l.start} с) после конца своей сцены (${s.duration} с)`);
-      if (l.opacity != null && !(isNum(l.opacity) && l.opacity >= 0 && l.opacity <= 1)) errors.push(`${ln}: opacity — от 0 до 1`);
+      const ln = isStr(l.id) ? `layer "${l.id}"` : lw;
+      if (!LAYER_KINDS.includes(l.kind)) return errors.push(`${ln}: kind is one of ${LAYER_KINDS.join(", ")}`);
+      if (l.start != null && !(isNum(l.start) && l.start >= 0)) errors.push(`${ln}: start is seconds from the scene's start, 0 or more`);
+      if (l.duration != null && !(isNum(l.duration) && l.duration > 0)) errors.push(`${ln}: duration is above 0 (or leave the field out: the layer runs to the scene's end)`);
+      if (isNum(l.start) && isNum(s.duration) && l.start >= s.duration) errors.push(`${ln}: starts (${l.start} s) after its scene has ended (${s.duration} s)`);
+      if (l.opacity != null && !(isNum(l.opacity) && l.opacity >= 0 && l.opacity <= 1)) errors.push(`${ln}: opacity is from 0 to 1`);
       checkPlaced(l, ln, errors);
       checkMotion(l.enter, `${ln}.enter`, errors);
       checkMotion(l.exit, `${ln}.exit`, errors);
       if (l.move != null && !(isObj(l.move) && (isObj(l.move.from) || isObj(l.move.to)))) errors.push(`${ln}: move — { from: { x, y, scale }, to: { x, y, scale }, ease }`);
       if (l.formats != null) {
-        if (!isObj(l.formats)) errors.push(`${ln}: formats — объект по форматам`);
+        if (!isObj(l.formats)) errors.push(`${ln}: formats is an object keyed by format`);
         else
           for (const [f, o] of Object.entries(l.formats)) {
-            if (!FORMATS[f]) errors.push(`${ln}: formats["${f}"] — нет такого формата`);
-            else if (!isObj(o)) errors.push(`${ln}: formats["${f}"] — объект`);
+            if (!FORMATS[f]) errors.push(`${ln}: formats["${f}"] is not a format`);
+            else if (!isObj(o)) errors.push(`${ln}: formats["${f}"] must be an object`);
             else {
               const extra = Object.keys(o).filter((k) => !FORMAT_KEYS.includes(k));
-              if (extra.length) errors.push(`${ln}: formats["${f}"] может менять только ${FORMAT_KEYS.join(", ")} (лишнее: ${extra.join(", ")})`);
+              if (extra.length) errors.push(`${ln}: formats["${f}"] may change only ${FORMAT_KEYS.join(", ")} (not ${extra.join(", ")})`);
               checkPlaced(o, `${ln}.formats["${f}"]`, errors);
             }
           }
       }
       if (l.kind === "video" || l.kind === "image") {
-        if (!isMediaPath(l.src)) errors.push(`${ln}: src — файл в папке media/ (сейчас ${JSON.stringify(l.src)})`);
+        if (!isMediaPath(l.src)) errors.push(`${ln}: src is a file in the media/ folder (it is ${JSON.stringify(l.src)})`);
       }
       if (l.kind === "video" || l.kind === "site") {
-        if (l.trim != null && !(isObj(l.trim) && (l.trim.in == null || (isNum(l.trim.in) && l.trim.in >= 0)))) errors.push(`${ln}: trim — { in } в секундах исходного видео`);
-        if (l.speed != null && !(isNum(l.speed) && l.speed >= 0.1 && l.speed <= 16)) errors.push(`${ln}: speed — от 0.1 до 16`);
-        if (l.volume != null && !(isNum(l.volume) && l.volume >= 0 && l.volume <= 2)) errors.push(`${ln}: volume — от 0 до 2`);
+        if (l.trim != null && !(isObj(l.trim) && (l.trim.in == null || (isNum(l.trim.in) && l.trim.in >= 0)))) errors.push(`${ln}: trim is { in }, in seconds of the source video`);
+        if (l.speed != null && !(isNum(l.speed) && l.speed >= 0.1 && l.speed <= 16)) errors.push(`${ln}: speed is from 0.1 to 16`);
+        if (l.volume != null && !(isNum(l.volume) && l.volume >= 0 && l.volume <= 2)) errors.push(`${ln}: volume is from 0 to 2`);
       }
       if (l.kind === "text") {
-        if (!isStr(l.text)) errors.push(`${ln}: text — строка`);
-        if (l.weight != null && !(isNum(l.weight) && l.weight >= 100 && l.weight <= 900)) errors.push(`${ln}: weight — от 100 до 900`);
+        if (!isStr(l.text)) errors.push(`${ln}: text is a string`);
+        if (l.weight != null && !(isNum(l.weight) && l.weight >= 100 && l.weight <= 900)) errors.push(`${ln}: weight is from 100 to 900`);
         if (l.animate != null) {
           const a = l.animate;
-          if (!isObj(a) || !TEXT_UNITS.includes(a.by)) errors.push(`${ln}: animate.by — один из ${TEXT_UNITS.join(", ")}`);
+          if (!isObj(a) || !TEXT_UNITS.includes(a.by)) errors.push(`${ln}: animate.by is one of ${TEXT_UNITS.join(", ")}`);
           else {
-            if (a.type != null && !TEXT_MOTIONS.includes(a.type)) errors.push(`${ln}: animate.type — один из ${TEXT_MOTIONS.join(", ")}`);
-            if (a.stagger != null && !(isNum(a.stagger) && a.stagger >= 0 && a.stagger <= 5)) errors.push(`${ln}: animate.stagger — секунды между соседними кусками, от 0 до 5`);
-            if (a.duration != null && !(isNum(a.duration) && a.duration > 0 && a.duration <= 10)) errors.push(`${ln}: animate.duration — секунды, больше 0`);
-            if (a.ease != null && !EASES.includes(a.ease)) errors.push(`${ln}: animate.ease — одна из ${EASES.join(", ")}`);
+            if (a.type != null && !TEXT_MOTIONS.includes(a.type)) errors.push(`${ln}: animate.type is one of ${TEXT_MOTIONS.join(", ")}`);
+            if (a.stagger != null && !(isNum(a.stagger) && a.stagger >= 0 && a.stagger <= 5)) errors.push(`${ln}: animate.stagger is the seconds between one piece and the next, from 0 to 5`);
+            if (a.duration != null && !(isNum(a.duration) && a.duration > 0 && a.duration <= 10)) errors.push(`${ln}: animate.duration is seconds, above 0`);
+            if (a.ease != null && !EASES.includes(a.ease)) errors.push(`${ln}: animate.ease is one of ${EASES.join(", ")}`);
           }
         }
         if (l.count != null) {
           const c = l.count;
-          if (!isObj(c) || !isNum(c.to)) errors.push(`${ln}: count — { from, to, decimals, duration, ease }, to обязательно`);
+          if (!isObj(c) || !isNum(c.to)) errors.push(`${ln}: count is { from, to, decimals, duration, ease }, and "to" is required`);
           else {
-            if (c.from != null && !isNum(c.from)) errors.push(`${ln}: count.from — число`);
-            if (c.decimals != null && !(Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 4)) errors.push(`${ln}: count.decimals — целое от 0 до 4`);
-            if (c.duration != null && !(isNum(c.duration) && c.duration > 0)) errors.push(`${ln}: count.duration — секунды, больше 0`);
-            if (c.ease != null && !EASES.includes(c.ease)) errors.push(`${ln}: count.ease — одна из ${EASES.join(", ")}`);
-            if (isStr(l.text) && !l.text.includes("{n}")) errors.push(`${ln}: в text нужно место для числа — {n}`);
+            if (c.from != null && !isNum(c.from)) errors.push(`${ln}: count.from is a number`);
+            if (c.decimals != null && !(Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 4)) errors.push(`${ln}: count.decimals is a whole number from 0 to 4`);
+            if (c.duration != null && !(isNum(c.duration) && c.duration > 0)) errors.push(`${ln}: count.duration is seconds, above 0`);
+            if (c.ease != null && !EASES.includes(c.ease)) errors.push(`${ln}: count.ease is one of ${EASES.join(", ")}`);
+            if (isStr(l.text) && !l.text.includes("{n}")) errors.push(`${ln}: the text needs a place for the number: {n}`);
           }
         }
       }
-      if (l.kind === "shape" && l.shape != null && !SHAPES.includes(l.shape)) errors.push(`${ln}: shape — один из ${SHAPES.join(", ")}`);
+      if (l.kind === "shape" && l.shape != null && !SHAPES.includes(l.shape)) errors.push(`${ln}: shape is one of ${SHAPES.join(", ")}`);
       if (l.kind === "site") {
-        if (!isWebAddress(l.url)) errors.push(`${ln}: url — адрес сайта, начинается с http:// или https://`);
-        if (l.recording != null && !isMediaPath(l.recording)) errors.push(`${ln}: recording — файл в папке media/`);
-        if (l.viewport != null && !(isObj(l.viewport) && isNum(l.viewport.width) && isNum(l.viewport.height) && l.viewport.width >= 320 && l.viewport.width <= 3840 && l.viewport.height >= 320 && l.viewport.height <= 3840)) errors.push(`${ln}: viewport — { width, height } от 320 до 3840`);
+        if (!isWebAddress(l.url)) errors.push(`${ln}: url is a site's address, starting with http:// or https://`);
+        if (l.recording != null && !isMediaPath(l.recording)) errors.push(`${ln}: recording is a file in the media/ folder`);
+        if (l.viewport != null && !(isObj(l.viewport) && isNum(l.viewport.width) && isNum(l.viewport.height) && l.viewport.width >= 320 && l.viewport.width <= 3840 && l.viewport.height >= 320 && l.viewport.height <= 3840)) errors.push(`${ln}: viewport is { width, height }, each from 320 to 3840`);
         if (l.actions != null) {
-          if (!Array.isArray(l.actions)) errors.push(`${ln}: actions — список действий`);
+          if (!Array.isArray(l.actions)) errors.push(`${ln}: actions is a list of actions`);
           else
             l.actions.forEach((a, ai) => {
               const aw = `${ln}, actions[${ai}]`;
-              if (!isObj(a) || !SITE_ACTIONS.includes(a.do)) return errors.push(`${aw}: do — один из ${SITE_ACTIONS.join(", ")}`);
-              if (a.for != null && !(isNum(a.for) && a.for >= 0 && a.for <= 120)) errors.push(`${aw}: for — секунды, от 0 до 120`);
-              if (a.ease != null && !EASES.includes(a.ease)) errors.push(`${aw}: ease — одна из ${EASES.join(", ")}`);
-              if (a.do === "scroll" && !(isNum(a.to) || isStr(a.to))) errors.push(`${aw}: scroll.to — пиксели, "bottom", "top" или CSS-селектор`);
-              if (a.do === "wheel" && !isNum(a.by)) errors.push(`${aw}: wheel.by — на сколько пикселей прокрутить колесом`);
-              if ((a.do === "move" || a.do === "click") && !(isStr(a.to) || (Array.isArray(a.to) && a.to.length === 2 && a.to.every(isNum)) || (a.do === "click" && a.to == null))) errors.push(`${aw}: to — CSS-селектор или [x, y] в пикселях окна`);
-              if (a.do === "type" && !isStr(a.text)) errors.push(`${aw}: type.text — строка`);
-              if (a.do === "key" && !isStr(a.key)) errors.push(`${aw}: key.key — название клавиши ("Enter", "Escape", "ArrowDown")`);
+              if (!isObj(a) || !SITE_ACTIONS.includes(a.do)) return errors.push(`${aw}: do is one of ${SITE_ACTIONS.join(", ")}`);
+              if (a.for != null && !(isNum(a.for) && a.for >= 0 && a.for <= 120)) errors.push(`${aw}: for is seconds, from 0 to 120`);
+              if (a.ease != null && !EASES.includes(a.ease)) errors.push(`${aw}: ease is one of ${EASES.join(", ")}`);
+              if (a.do === "scroll" && !(isNum(a.to) || isStr(a.to))) errors.push(`${aw}: scroll.to is pixels, "bottom", "top" or a CSS selector`);
+              if (a.do === "wheel" && !isNum(a.by)) errors.push(`${aw}: wheel.by is how many pixels to turn the wheel`);
+              if ((a.do === "move" || a.do === "click") && !(isStr(a.to) || (Array.isArray(a.to) && a.to.length === 2 && a.to.every(isNum)) || (a.do === "click" && a.to == null))) errors.push(`${aw}: to is a CSS selector or [x, y] in window pixels`);
+              if (a.do === "type" && !isStr(a.text)) errors.push(`${aw}: type.text is a string`);
+              if (a.do === "key" && !isStr(a.key)) errors.push(`${aw}: key.key is a key's name ("Enter", "Escape", "ArrowDown")`);
             });
         }
       }
     });
   });
   if (clip.audio != null) {
-    if (!Array.isArray(clip.audio)) errors.push("audio: список звуковых дорожек");
+    if (!Array.isArray(clip.audio)) errors.push("audio: a list of audio tracks");
     else
       clip.audio.forEach((a, ai) => {
         const aw = `audio[${ai}]`;
-        if (!isObj(a)) return errors.push(`${aw}: должно быть объектом`);
+        if (!isObj(a)) return errors.push(`${aw}: must be an object`);
         once(a.id, aw);
-        if (!isMediaPath(a.src)) errors.push(`${aw}: src — файл в папке media/`);
-        if (a.start != null && !(isNum(a.start) && a.start >= 0)) errors.push(`${aw}: start — секунды от начала клипа`);
-        if (a.volume != null && !(isNum(a.volume) && a.volume >= 0 && a.volume <= 2)) errors.push(`${aw}: volume — от 0 до 2`);
-        for (const k of ["fadeIn", "fadeOut", "trimIn", "duration"]) if (a[k] != null && !(isNum(a[k]) && a[k] >= 0)) errors.push(`${aw}: ${k} — секунды, не меньше 0`);
+        if (!isMediaPath(a.src)) errors.push(`${aw}: src is a file in the media/ folder`);
+        if (a.start != null && !(isNum(a.start) && a.start >= 0)) errors.push(`${aw}: start is seconds from the clip's start`);
+        if (a.volume != null && !(isNum(a.volume) && a.volume >= 0 && a.volume <= 2)) errors.push(`${aw}: volume is from 0 to 2`);
+        for (const k of ["fadeIn", "fadeOut", "trimIn", "duration"]) if (a[k] != null && !(isNum(a[k]) && a[k] >= 0)) errors.push(`${aw}: ${k} is seconds, 0 or more`);
       });
   }
   return errors;
@@ -401,7 +401,7 @@ export function mediaUsed(clip) {
   return used;
 }
 
-export const blankClip = (name = "Новый клип") => ({
+export const blankClip = (name = "New clip") => ({
   version: 1,
   name,
   fps: 30,
@@ -413,10 +413,10 @@ export const blankClip = (name = "Новый клип") => ({
   scenes: [
     {
       id: "title",
-      label: "Титр",
+      label: "Title",
       duration: 3,
       background: "#080808",
-      layers: [{ id: "title-text", kind: "text", label: "Название", text: name, size: 96, weight: 600, color: "#ffffff", enter: { type: "up", duration: 0.6 }, exit: { type: "fade", duration: 0.4 } }],
+      layers: [{ id: "title-text", kind: "text", label: "Name", text: name, size: 96, weight: 600, color: "#ffffff", enter: { type: "up", duration: 0.6 }, exit: { type: "fade", duration: 0.4 } }],
     },
   ],
   audio: [],

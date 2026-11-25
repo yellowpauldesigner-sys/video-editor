@@ -1,31 +1,31 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="clips-token" content="__CLIPS_TOKEN__" />
     <title>uberdesigner clips</title>
-    <meta name="description" content="Видеоредактор для дизайнеров: соберите клип о своей работе прямо в браузере." />
+    <meta name="description" content="A video editor for designers: make a clip of your work right in the browser." />
     <link rel="stylesheet" href="css/app.css" />
   </head>
   <body>
     <div id="app">
       <header class="top">
         <div class="brand"><span class="mark"></span><b>uberdesigner</b> clips</div>
-        <select id="clips" class="clips" title="Клипы в этом браузере" aria-label="Клипы"></select>
-        <input id="clipName" class="name" spellcheck="false" aria-label="Название клипа" />
+        <select id="clips" class="clips" title="Clips in this browser" aria-label="Clips"></select>
+        <input id="clipName" class="name" spellcheck="false" aria-label="Clip name" />
         <span id="saved" class="saved"></span>
         <div class="grow"></div>
-        <div id="formats" class="seg" role="tablist" aria-label="Формат кадра"></div>
-        <button id="theme" class="icon" title="Светлая или тёмная тема" aria-label="Тема">◐</button>
-        <button id="renderBtn" class="primary">Собрать видео</button>
+        <div id="formats" class="seg" role="tablist" aria-label="Frame format"></div>
+        <button id="theme" class="icon" title="Light or dark theme" aria-label="Theme">◐</button>
+        <button id="renderBtn" class="primary">Build video</button>
       </header>
 
       <aside class="left">
         <div class="tabs" id="leftTabs">
-          <button data-tab="layers" class="on">Слои</button>
-          <button data-tab="media">Медиа</button>
-          <button data-tab="history">История</button>
+          <button data-tab="layers" class="on">Layers</button>
+          <button data-tab="media">Media</button>
+          <button data-tab="history">History</button>
         </div>
         <div id="leftBody" class="body"></div>
       </aside>
@@ -39,33 +39,33 @@
           </div>
           <div id="welcome" class="welcome" hidden></div>
           <div id="jobs" class="jobs"></div>
-          <div id="drop" class="drop" hidden><div>Отпустите файлы: они попадут в медиа клипа</div></div>
+          <div id="drop" class="drop" hidden><div>Drop the files: they go into the clip's media</div></div>
         </div>
         <div class="transport">
-          <button id="play" class="icon big" title="Пуск / пауза (пробел)" aria-label="Пуск">▶</button>
+          <button id="play" class="icon big" title="Play / pause (Space)" aria-label="Play">▶</button>
           <span id="time" class="time">00:00.00</span>
           <span class="dim">/</span>
           <span id="total" class="time dim">00:00.00</span>
-          <button id="mute" class="icon" title="Звук в предпросмотре" aria-label="Звук">🔊</button>
+          <button id="mute" class="icon" title="Sound in the preview" aria-label="Audio">🔊</button>
           <div class="grow"></div>
-          <button id="splitBtn" class="ghost" title="Разрезать сцену в этом месте (S)">Разрезать</button>
-          <button id="zoomOut" class="icon" title="Мельче" aria-label="Мельче">−</button>
-          <button id="zoomFit" class="ghost" title="Весь клип по ширине">Весь клип</button>
-          <button id="zoomIn" class="icon" title="Крупнее" aria-label="Крупнее">+</button>
+          <button id="splitBtn" class="ghost" title="Split the scene here (S)">Split</button>
+          <button id="zoomOut" class="icon" title="Zoom out" aria-label="Zoom out">−</button>
+          <button id="zoomFit" class="ghost" title="Fit the whole clip">Whole clip</button>
+          <button id="zoomIn" class="icon" title="Zoom in" aria-label="Zoom in">+</button>
         </div>
         <div id="timeline" class="timeline"><div id="tlInner" class="tlInner"></div></div>
         <form id="chat" class="chat" hidden>
           <span id="chip" class="chip"></span>
-          <textarea id="ask" rows="1" placeholder="Что изменить? Например: «сделай сцену короче и выведи цифру счётчиком»"></textarea>
-          <select id="model" title="Модель Claude"></select>
-          <button class="primary" id="send">Изменить</button>
+          <textarea id="ask" rows="1" placeholder="What should change? For example: “make this scene shorter and count the number up”"></textarea>
+          <select id="model" title="Claude model"></select>
+          <button class="primary" id="send">Change</button>
         </form>
       </main>
 
       <aside class="right">
         <div class="tabs" id="rightTabs" hidden>
-          <button data-tab="props" class="on">Свойства</button>
-          <button data-tab="ai">AI-изменения<i id="aiDot" class="dot" hidden></i></button>
+          <button data-tab="props" class="on">Properties</button>
+          <button data-tab="ai">AI changes<i id="aiDot" class="dot" hidden></i></button>
         </div>
         <div id="rightBody" class="body"></div>
       </aside>

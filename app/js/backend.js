@@ -25,13 +25,13 @@ function browserBackend() {
   return {
     mode: "browser",
     persistent: () => store.persistent(),
-    savedNote: () => (store.persistent() ? "Сохранено в этом браузере" : "Не сохраняется: приватное окно"),
+    savedNote: () => (store.persistent() ? "Saved in this browser" : "Not being saved: private window"),
     listClips: () => store.listClips(),
     lastOpened: () => store.lastOpened(),
     async createClip(clip) {
       const id = store.newId();
       await store.saveClip(id, clip);
-      await store.recordHistory(id, clip, "Новый клип");
+      await store.recordHistory(id, clip, "New clip");
       return id;
     },
     deleteClip: (id) => store.deleteClip(id),
@@ -85,7 +85,7 @@ function projectBackend() {
     const res = await fetch(path, body === undefined ? {} : { method, headers: { "content-type": "application/json", "x-clips-token": TOKEN }, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.error ?? `Ошибка ${res.status}`);
+      const err = new Error(data.error ?? `Error ${res.status}`);
       err.problems = data.problems;
       throw err;
     }
@@ -96,7 +96,7 @@ function projectBackend() {
     mode: "project",
     clipRev: -1,
     persistent: () => true,
-    savedNote: () => "Сохранено в папке клипа",
+    savedNote: () => "Saved in the clip's folder",
     listClips: async () => [{ id: "project", name: "", updatedAt: 0 }],
     lastOpened: async () => "project",
     createClip: async () => "project",
@@ -117,7 +117,7 @@ function projectBackend() {
     async addMedia(id, file, name, info) {
       const res = await fetch(`/__clips/media?name=${encodeURIComponent(name)}`, { method: "POST", headers: { "x-clips-token": TOKEN }, body: file });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "файл не сохранился");
+      if (!res.ok) throw new Error(data.error ?? "the file wasn't saved");
       const item = { ...data.item, ...info };
       await b.setMediaInfo(id, item.path, info);
       return { ...item, url: urlOf(item) };
@@ -134,7 +134,7 @@ function projectBackend() {
     async saveRender(name, blob) {
       const res = await fetch(`/__clips/renders?name=${encodeURIComponent(name)}`, { method: "POST", headers: { "x-clips-token": TOKEN }, body: blob });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "файл не сохранился");
+      if (!res.ok) throw new Error(data.error ?? "the file wasn't saved");
       return { name: data.name, url: `/${data.path}`, path: data.path, download: false };
     },
     keep: () => {},

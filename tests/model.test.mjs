@@ -31,7 +31,7 @@ test("problems are named in words", () => {
   c.scenes[1].transition.type = "spin";
   const errors = validate(c);
   assert.equal(errors.length, 3);
-  assert.match(errors.join("\n"), /уже занят/);
+  assert.match(errors.join("\n"), /already taken/);
   assert.match(errors.join("\n"), /media\//);
 });
 
@@ -90,12 +90,12 @@ test("a recording knows what it was made from", () => {
 
 test("motion type and counters", () => {
   const c = blankClip();
-  c.scenes[0].layers.push({ id: "n", kind: "text", text: "+{n} клиентов", count: { from: 0, to: 12500 }, animate: { by: "word", type: "up", stagger: 0.08 } }, { id: "bar", kind: "shape", shape: "ellipse", fill: "#fff", enter: { type: "grow-y", duration: 0.6 } });
+  c.scenes[0].layers.push({ id: "n", kind: "text", text: "+{n} clients", count: { from: 0, to: 12500 }, animate: { by: "word", type: "up", stagger: 0.08 } }, { id: "bar", kind: "shape", shape: "ellipse", fill: "#fff", enter: { type: "grow-y", duration: 0.6 } });
   assert.deepEqual(validate(c), []);
   assert.equal(countValue({ from: 0, to: 12500 }, 99, 2), "12\u202f500");
   assert.equal(countValue({ from: 0, to: 100, ease: "linear", duration: 2 }, 1, 5), "50");
   assert.equal(countValue({ to: 98.6, decimals: 1, comma: true }, 9, 2), "98,6");
-  c.scenes[0].layers[1].text = "без места";
+  c.scenes[0].layers[1].text = "no place for it";
   c.scenes[0].layers[1].animate.by = "syllable";
   c.scenes[0].layers[2].shape = "star";
   assert.equal(validate(c).length, 3);

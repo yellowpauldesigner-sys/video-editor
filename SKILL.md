@@ -1,6 +1,6 @@
 ---
 name: uberdesigner-clips
-description: Make and edit short videos in uberdesigner clips, a video editor that opens on localhost beside the chat. A clip is scenes and layers on a timeline (motion typography, counters and simple infographics, video, pictures, sound); the person edits by hand in the editor and asks Claude to change one scene at a time; the video is built in the browser in several formats (16:9, 9:16, 1:1, 4:5). Use when someone wants a motion video, a reel, a case film or an explainer made from text, numbers and footage; wants a finished video opened for editing, cut into scenes, captioned, re-timed or re-formatted; asks to set up or open uberdesigner clips (the clip editor, "монтаж"); or asks to change, look at or render a clip that has a clip.json.
+description: Make and edit short videos in uberdesigner clips, a video editor that opens on localhost beside the chat. A clip is scenes and layers on a timeline (motion typography, counters and simple infographics, video, pictures, sound); the person edits by hand in the editor and asks Claude to change one scene at a time; the video is built in the browser in several formats (16:9, 9:16, 1:1, 4:5). Use when someone wants a motion video, a reel, a case film or an explainer made from text, numbers and footage; wants a finished video opened for editing, cut into scenes, captioned, re-timed or re-formatted; asks to set up or open uberdesigner clips (the clip editor); or asks to change, look at or render a clip that has a clip.json.
 ---
 
 # uberdesigner clips
@@ -13,6 +13,10 @@ chat bar: the request carries only that scene's JSON, so it is a call of one or 
 result arrives as a card to keep, undo or refine. The editor's page draws every frame and builds the MP4 itself.
 
 Your part is the first cut. After that the person works in the editor and comes back to you for bigger things.
+
+The editor's interface and everything the scripts print are in English. Talk to the person in the language they
+write in, name the editor's buttons as they are on screen, and write the clip's own words (its titles, captions
+and labels) in the language the video is for.
 
 Scripts are in `scripts/` next to this file; run them with Node from anywhere. `<project>` is the clip's folder.
 The format is in `reference/clip-format.md`, with a complete example in `reference/example.clip.json`. Read the
@@ -48,7 +52,7 @@ what is missing and changes the work, at most two questions:
 - **What it's made from**: the words and numbers it should say (or a text to draw them from), and any footage,
   pictures or music to put between them.
 
-Don't ask about fonts, colours or transitions. Take them from the brand or the footage, and let the person change
+Don't ask about fonts, colors or transitions. Take them from the brand or the footage, and let the person change
 them in the editor.
 
 There are two ways in. Most requests are the first.
@@ -80,16 +84,16 @@ node scripts/clips.mjs split <project> media/<video file>
 
 `split` finds the shots and prints where each starts and how long it lasts. Write one scene per shot: a `video`
 layer with `trim.in` at the shot's start, in a scene as long as the shot, `volume: 1` if the video has sound that
-matters. Name each scene by what is in it only if you looked (take a `still`); otherwise "Сцена 1", "Сцена 2".
+matters. Name each scene by what is in it only if you looked (take a `still`); otherwise "Scene 1", "Scene 2".
 If `split` finds no cuts, make it one scene and tell the person that **S** cuts at the playhead and that the media
-library has **✂ Разбить на сцены** for any video added later.
+library has **✂ Split into scenes** for any video added later.
 
 ## 2. Write clip.json
 
 This is the step that takes judgment. Write the whole file at once.
 
 **The shape of a motion clip.** One idea per scene, 1.5–4 s each. A statement → a number → a piece of footage → a
-statement → the end card, or whatever order the story wants. Each scene has a background colour and 1–4 layers.
+statement → the end card, or whatever order the story wants. Each scene has a background color and 1–4 layers.
 
 **Kinetic type.** A `text` layer with `animate: { "by": "word", "type": "up" }` comes in word by word. Use `word`
 for statements, `line` for two-line captions, `letter` only for one or two words. Two to six words on screen at a
@@ -107,7 +111,7 @@ start them 0.08–0.15 s apart, and label each value with a text. Three to five 
 graphic scenes. `trim.in` picks the moment; keep each piece 2–5 s.
 
 **Rules that keep it from looking generated.**
-- One typeface, two or three sizes, two or three colours for the whole clip. Background and ink come from the
+- One typeface, two or three sizes, two or three colors for the whole clip. Background and ink come from the
   brand; if there is none, near-black with white, plus one accent.
 - Motion eases out (`expoOut` for type). Between scenes: `cut`, or `fade` / `slide-up` 0.4–0.5 s. Pick one and
   keep it for the whole clip.
@@ -118,7 +122,7 @@ graphic scenes. `trim.in` picks the moment; keep each piece 2–5 s.
 it: type is usually smaller and stacked in 9:16, charts move under their number, wide footage becomes `fit:
 "contain"` or gets a `focus`. Check the other format with a `still`, don't assume.
 
-**Facts.** Give the clip 2–5 `facts`: what it's for, its tone, the brand's colours and typeface, any rule the
+**Facts.** Give the clip 2–5 `facts`: what it's for, its tone, the brand's colors and typeface, any rule the
 person stated. Claude gets them with every change made in the editor.
 
 ## 3. Verify and look
@@ -152,11 +156,11 @@ Tell the person, briefly and in plain words:
 - what you made: the scenes in a line each, the length, the formats;
 - that the editor has layers and media on the left, the frame and the timeline in the middle, values on the right;
 - that they can drag a layer on the frame, drag bars and their edges on the timeline, press **S** to cut a scene
-  at the playhead and **Space** to play; every hand edit is free and can be stepped back (⌘Z, or **История**);
+  at the playhead and **Space** to play; every hand edit is free and can be stepped back (⌘Z, or **History**);
 - that the format switch at the top shows the same clip in each format, and a move made there is for that format;
 - that a change typed in the bar under the frame goes to Claude with only the picked scene and comes back as a
-  card in **AI-изменения** to keep, undo or refine;
-- that **Собрать видео** (top right) builds the checked formats into the clip's `renders/` folder.
+  card in **AI changes** to keep, undo or refine;
+- that **Build video** (top right) builds the checked formats into the clip's `renders/` folder.
 
 End the message with the link alone in a `text` block, after "Open it in Chrome":
 
@@ -165,7 +169,7 @@ http://localhost:5320
 ```
 
 Give the address the server printed, never a guess. In the Claude desktop app the link also opens in the preview
-beside the chat; building the video there may not work, so if **Собрать видео** fails in the preview, the same
+beside the chat; building the video there may not work, so if **Build video** fails in the preview, the same
 link in Chrome is the way.
 
 ## Changing a clip from the chat
@@ -193,7 +197,7 @@ recording as a file.
 ## What it can't do yet
 
 Say these plainly when they come up, rather than working around them:
-- Keyframes beyond one `move` per layer, masks, blend modes, colour correction, speed ramps, text on a path.
+- Keyframes beyond one `move` per layer, masks, blend modes, color correction, speed ramps, text on a path.
 - Charts beyond what a few shapes make: no pie, no line chart, no axes.
 - Waveforms, cutting to the beat, voice-over recording, captions from speech.
 - Output other than MP4 (H.264). Sound is AAC where Chrome can encode it and Opus otherwise (QuickTime doesn't

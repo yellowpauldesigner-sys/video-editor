@@ -298,7 +298,7 @@ export class Stage {
           ctx.fillStyle = "#a6a6ab";
           ctx.font = `500 ${28 * this.unit}px "Instrument Sans", system-ui, sans-serif`;
           ctx.textAlign = "center";
-          ctx.fillText(L.kind === "site" ? "Сайт не записан" : "Файла нет в клипе", 0, 0);
+          ctx.fillText(L.kind === "site" ? "Site not recorded" : "File missing from the clip", 0, 0);
         } else {
           ctx.clip();
           const isVideo = el.tagName === "VIDEO";

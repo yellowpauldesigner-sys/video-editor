@@ -40,7 +40,7 @@ async function mixSound(clip, format, urls, getBlob, onNote) {
   });
   const live = plan.filter((p) => p.volume > 0 && p.len > 0.02 && p.at < total && urls[p.src]);
   if (!live.length) return null;
-  onNote?.("Свожу звук…");
+  onNote?.("Mixing the sound…");
   const RATE = 48000;
   const ctx = new OfflineAudioContext(2, Math.ceil(total * RATE), RATE);
   const decoded = new Map();
@@ -115,13 +115,13 @@ async function encodeSound(buffer, mp4) {
 
 // Build one format. job: { stopped, progress(fraction, note) }. Returns { blob, width, height, sound }.
 export async function exportFormat(clip, format, { urls, getBlob, quality = "high", job }) {
-  if (!canExport()) throw new Error("Этот браузер не умеет собирать видео. Откройте редактор в Chrome или Edge.");
+  if (!canExport()) throw new Error("This browser can't build videos. Open the editor in Chrome or Edge.");
   const { width, height } = frameSize(format);
   const fps = clip.fps;
   const total = totalDuration(clip);
   const frames = Math.max(1, Math.round(total * fps));
   const config = await videoConfig(width, height, fps, quality);
-  if (!config) throw new Error("В этом браузере нет кодировщика H.264. Откройте редактор в Chrome или Edge.");
+  if (!config) throw new Error("This browser has no H.264 encoder. Open the editor in Chrome or Edge.");
 
   const canvas = document.createElement("canvas");
   const stage = new Stage(canvas, { silent: true });
@@ -133,7 +133,7 @@ export async function exportFormat(clip, format, { urls, getBlob, quality = "hig
   try {
     const began = performance.now();
     for (let f = 0; f < frames; f++) {
-      if (job.stopped) throw new Error("Остановлено.");
+      if (job.stopped) throw new Error("Stopped.");
       if (failed) throw failed;
       await stage.seek((f + 0.5) / fps);
       const frame = new VideoFrame(canvas, { timestamp: Math.round((f * 1e6) / fps), duration: Math.round(1e6 / fps) });
@@ -142,7 +142,7 @@ export async function exportFormat(clip, format, { urls, getBlob, quality = "hig
       while (enc.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
       if (f % 5 === 0) {
         const left = ((performance.now() - began) / (f + 1)) * (frames - f - 1);
-        job.progress((f + 1) / frames, `${format} · кадр ${f + 1} из ${frames}${f > 15 ? ` · осталось ~${Math.max(1, Math.round(left / 1000))} с` : ""}`);
+        job.progress((f + 1) / frames, `${format} · frame ${f + 1} of ${frames}${f > 15 ? ` · ~${Math.max(1, Math.round(left / 1000))} s left` : ""}`);
         await new Promise((r) => setTimeout(r, 0)); // let the page breathe
       }
     }

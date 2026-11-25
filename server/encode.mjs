@@ -7,7 +7,7 @@ import { findFfmpeg } from "./tools.mjs";
 // Frames in, a finished video file out. Returns { write(buffer), finish() }.
 export function encoder(out, { fps, png = false, crf = 17, gop = null }) {
   const ffmpeg = findFfmpeg();
-  if (!ffmpeg) throw new Error("Не нашёл ffmpeg на этом компьютере. Он нужен только для покадровой записи сайта: sh scripts/install-ffmpeg.sh");
+  if (!ffmpeg) throw new Error("ffmpeg wasn't found on this computer. Only the frame-by-frame site recorder needs it: sh scripts/install-ffmpeg.sh");
   const args = [
     "-y", "-loglevel", "error", "-f", "image2pipe", "-c:v", png ? "png" : "mjpeg", "-framerate", String(fps), "-i", "-",
     "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2,scale=in_range=full:out_range=tv:out_color_matrix=bt709,format=yuv420p",
@@ -24,13 +24,13 @@ export function encoder(out, { fps, png = false, crf = 17, gop = null }) {
   return {
     child,
     async write(buf) {
-      if (failed) throw new Error(`ffmpeg остановился: ${err.trim() || failed.message}`);
+      if (failed) throw new Error(`ffmpeg stopped: ${err.trim() || failed.message}`);
       if (!child.stdin.write(buf)) await new Promise((r) => child.stdin.once("drain", r));
     },
     async finish() {
       child.stdin.end();
       const code = await closed;
-      if (code !== 0) throw new Error(`ffmpeg не собрал видео: ${err.trim().split("\n").slice(-3).join(" ") || `код ${code}`}`);
+      if (code !== 0) throw new Error(`ffmpeg didn't build the video: ${err.trim().split("\n").slice(-3).join(" ") || `exit code ${code}`}`);
     },
     kill() {
       child.kill("SIGKILL");

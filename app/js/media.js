@@ -178,7 +178,7 @@ export async function detectCuts(url, { onProgress, shouldStop, step = 0.2, minS
     await once(v, "seeked", 6000).catch(() => {});
     ctx.drawImage(v, 0, 0, W, H);
     const px = ctx.getImageData(0, 0, W, H).data;
-    // brightness of each pixel, and a coarse colour histogram: a pan moves pixels but keeps the colours
+    // brightness of each pixel, and a coarse color histogram: a pan moves pixels but keeps the colors
     const luma = new Float32Array(W * H);
     const hist = new Float32Array(64);
     for (let p = 0, q = 0; p < px.length; p += 4, q++) {
@@ -190,7 +190,7 @@ export async function detectCuts(url, { onProgress, shouldStop, step = 0.2, minS
       for (let q = 0; q < luma.length; q++) d += Math.abs(luma[q] - prev.luma[q]);
       let hd = 0;
       for (let b = 0; b < 64; b++) hd += Math.abs(hist[b] - prev.hist[b]);
-      diffs.push({ t, pixels: d / luma.length / 255, colours: hd / (2 * W * H) });
+      diffs.push({ t, pixels: d / luma.length / 255, colors: hd / (2 * W * H) });
     }
     prev = { luma, hist };
     if (i % 5 === 0) onProgress?.(i / count);
@@ -198,7 +198,7 @@ export async function detectCuts(url, { onProgress, shouldStop, step = 0.2, minS
   v.removeAttribute("src");
   v.load();
   // a cut: both measures jump, and the jump stands well above the moments around it
-  const score = diffs.map((d) => Math.min(d.pixels * 2.2, d.colours * 1.6));
+  const score = diffs.map((d) => Math.min(d.pixels * 2.2, d.colors * 1.6));
   const cuts = [];
   for (let i = 0; i < score.length; i++) {
     const around = [];

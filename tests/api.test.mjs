@@ -29,7 +29,7 @@ const onDisk = () => JSON.parse(readFileSync(join(dir, "clip.json"), "utf8"));
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), "clips-test-"));
   const clip = blankClip("Test");
-  clip.scenes.push({ id: "two", label: "Вторая", duration: 4, layers: [] });
+  clip.scenes.push({ id: "two", label: "Second", duration: 4, layers: [] });
   writeFileSync(join(dir, "clip.json"), JSON.stringify(clip));
   s = await start(dir, { port: 5470, quiet: true });
   token = s.project.token;
@@ -57,17 +57,17 @@ test("a bad clip is refused whole and the file stays", async () => {
   clip.scenes[0].layers.push({ id: "v", kind: "video", src: "media/none.mp4" });
   const r = await call("/__clips/project", { clip }, "PUT");
   assert.equal(r.status, 422);
-  assert.match(r.data.problems[0], /нет в проекте/);
+  assert.match(r.data.problems[0], /is not in the project/);
   assert.equal(onDisk().scenes[0].layers.length, 1);
 });
 
 test("a save writes the file and a point in History; going back is a new point", async () => {
   const clip = onDisk();
   clip.scenes[0].duration = 5;
-  assert.equal((await call("/__clips/project", { clip, label: "Длительность" }, "PUT")).status, 200);
+  assert.equal((await call("/__clips/project", { clip, label: "Duration" }, "PUT")).status, 200);
   assert.equal(onDisk().scenes[0].duration, 5);
   const { data } = await call("/__clips/history");
-  assert.equal(data.versions[0].label, "Длительность");
+  assert.equal(data.versions[0].label, "Duration");
   const first = data.versions.at(-1);
   await call("/__clips/history/restore", { id: first.id });
   assert.equal(onDisk().scenes[0].duration, 3);
@@ -75,17 +75,17 @@ test("a save writes the file and a point in History; going back is a new point",
 });
 
 test("Claude changes one scene; the card keeps what it did; Undo puts it back", async () => {
-  const r = await call("/__clips/change", { sceneId: "two", request: "короче" });
+  const r = await call("/__clips/change", { sceneId: "two", request: "shorter" });
   assert.equal(r.status, 200);
   let st = await settle();
   const card = st.cards.at(-1);
   assert.equal(card.state, "ready");
-  assert.equal(card.tries[0].summary, "Сделал сцену вдвое короче.");
+  assert.equal(card.tries[0].summary, "Made the scene half as long.");
   assert.equal(card.tries[0].before, undefined); // the copies stay on the server
   assert.equal(onDisk().scenes[1].duration, 2);
   assert.equal(onDisk().scenes[0].duration, 3); // the other scene was not sent and did not change
   // a refinement is a second try on the same card
-  await call("/__clips/change", { sceneId: "two", request: "ещё короче", cardId: card.id });
+  await call("/__clips/change", { sceneId: "two", request: "shorter still", cardId: card.id });
   st = await settle();
   assert.equal(st.cards.at(-1).tries.length, 2);
   assert.equal(onDisk().scenes[1].duration, 1);
@@ -96,7 +96,7 @@ test("Claude changes one scene; the card keeps what it did; Undo puts it back", 
 
 test("an answer that breaks the format is sent back once, then used", async () => {
   process.env.FAKE_CLAUDE = "bad";
-  await call("/__clips/change", { sceneId: "two", request: "короче" });
+  await call("/__clips/change", { sceneId: "two", request: "shorter" });
   const st = await settle();
   assert.equal(st.cards.at(-1).state, "ready");
   assert.equal(onDisk().scenes[1].duration, 2);
@@ -106,18 +106,18 @@ test("an answer that breaks the format is sent back once, then used", async () =
 test("Undo is refused once the scene was changed again by hand", async () => {
   const card = (await call("/__clips/state")).data.cards.at(-1);
   const clip = onDisk();
-  clip.scenes[1].label = "Руками";
+  clip.scenes[1].label = "By hand";
   await call("/__clips/project", { clip }, "PUT");
   const r = await call("/__clips/cards/undo", { id: card.id });
   assert.equal(r.status, 400);
-  assert.match(r.data.error, /Истори/);
-  assert.equal(onDisk().scenes[1].label, "Руками");
+  assert.match(r.data.error, /History/);
+  assert.equal(onDisk().scenes[1].label, "By hand");
 });
 
 test("a question changes nothing", async () => {
   process.env.FAKE_CLAUDE = "question";
   const was = readFileSync(join(dir, "clip.json"), "utf8");
-  await call("/__clips/change", { sceneId: "title", request: "поставь видео" });
+  await call("/__clips/change", { sceneId: "title", request: "put a video in" });
   const st = await settle();
   assert.equal(st.cards.at(-1).state, "question");
   assert.equal(readFileSync(join(dir, "clip.json"), "utf8"), was);
@@ -125,13 +125,14 @@ test("a question changes nothing", async () => {
 });
 
 test("a whole-clip change", async () => {
-  await call("/__clips/change", { sceneId: null, request: "переименуй" });
+  await call("/__clips/change", { sceneId: null, request: "rename it" });
   const st = await settle();
-  assert.equal(st.cards.at(-1).label, "Весь клип");
+  assert.equal(st.cards.at(-1).label, "Whole clip");
   assert.equal(onDisk().name, "Test v2");
 });
 
 test("media: an upload lands in media/, and nothing else can be read", async () => {
+  // a name in another script and with a space: file names are kept readable, whatever language they are in
   const res = await fetch(s.origin + "/__clips/media?name=" + encodeURIComponent("../../кадр 1.png"), { method: "POST", headers: { "x-clips-token": token }, body: Buffer.from("89504e470d0a1a0a", "hex") });
   const { item } = await res.json();
   assert.equal(item.path, "media/кадр-1.png");
@@ -146,11 +147,11 @@ test("media: an upload lands in media/, and nothing else can be read", async () 
 test("a clip edited by other hands is picked up", async () => {
   const before = (await call("/__clips/state")).data.clipRev;
   const clip = onDisk();
-  clip.name = "Из чата";
+  clip.name = "From the chat";
   writeFileSync(join(dir, "clip.json"), JSON.stringify(clip));
   for (let i = 0; i < 60 && (await call("/__clips/state")).data.clipRev === before; i++) await new Promise((r) => setTimeout(r, 50));
   assert.ok((await call("/__clips/state")).data.clipRev > before);
-  assert.equal((await call("/__clips/project")).data.clip.name, "Из чата");
+  assert.equal((await call("/__clips/project")).data.clip.name, "From the chat");
 });
 
 test("what the page learned about a file is kept, and a render lands in renders/", async () => {

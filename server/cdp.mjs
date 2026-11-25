@@ -11,7 +11,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function openTab({ width, height, scale = 1 }) {
   const chromePath = findChrome();
-  if (!chromePath) throw new Error("Не нашёл Google Chrome на этом компьютере. Установите Chrome (или укажите путь в переменной CHROME).");
+  if (!chromePath) throw new Error("Google Chrome wasn't found on this computer. Install Chrome (or put its path in the CHROME variable).");
   const profile = mkdtempSync(join(tmpdir(), "uberdesigner-clips-chrome-"));
   const extra = (process.env.CHROME_FLAGS ?? "").split(/\s+/).filter(Boolean);
   const chrome = spawn(
@@ -56,7 +56,7 @@ export async function openTab({ width, height, scale = 1 }) {
       ws = new WebSocket(page.webSocketDebuggerUrl);
       await new Promise((res, rej) => {
         ws.addEventListener("open", res, { once: true });
-        ws.addEventListener("error", () => rej(new Error("Chrome не ответил")), { once: true });
+        ws.addEventListener("error", () => rej(new Error("Chrome didn't answer")), { once: true });
       });
     } catch {
       ws = null;
@@ -73,7 +73,7 @@ export async function openTab({ width, height, scale = 1 }) {
   };
   if (!ws) {
     close();
-    throw new Error(`Chrome не запустился (${chromePath}).${process.platform === "linux" ? " В контейнере нужен CHROME_FLAGS=--no-sandbox." : ""}`);
+    throw new Error(`Chrome didn't start (${chromePath}).${process.platform === "linux" ? " In a container it needs CHROME_FLAGS=--no-sandbox." : ""}`);
   }
   let id = 0;
   const pending = new Map();
@@ -87,7 +87,7 @@ export async function openTab({ width, height, scale = 1 }) {
     } else if (d.method) for (const fn of listeners.get(d.method) ?? []) fn(d.params);
   });
   ws.addEventListener("close", () => {
-    for (const p of pending.values()) p.rej(new Error("Chrome закрылся"));
+    for (const p of pending.values()) p.rej(new Error("Chrome closed"));
     pending.clear();
   });
   const send = (method, params = {}) =>
@@ -111,7 +111,7 @@ export async function openTab({ width, height, scale = 1 }) {
   // Evaluate in the page; a promise is waited for, an exception is thrown here with the page's own message
   const ev = async (expression) => {
     const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
-    if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description?.split("\n")[0] ?? r.exceptionDetails.text ?? "Ошибка на странице");
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description?.split("\n")[0] ?? r.exceptionDetails.text ?? "An error on the page");
     return r.result?.value;
   };
   await send("Page.enable");

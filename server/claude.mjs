@@ -11,7 +11,7 @@ import { findClaude, run } from "./tools.mjs";
 export const MODELS = ["haiku", "sonnet", "opus"];
 
 // What a clip.json may hold, as short as it can be said. reference/clip-format.md is the long version.
-export const FORMAT_BRIEF = `A clip is JSON. Times are seconds. Positions are percent of the frame, 0 is the centre (x right, y down).
+export const FORMAT_BRIEF = `A clip is JSON. Times are seconds. Positions are percent of the frame, 0 is the center (x right, y down).
 Sizes of text and radius are in design pixels: the frame's short side is always 1080 of them.
 
 clip: { version: 1, name, fps, format (main format), formats: [${Object.keys(FORMATS).map((f) => `"${f}"`).join(", ")}], background, facts: [string], fonts: [Google Fonts family | { family, src: "media/…" }], scenes: [scene], audio: [track] }
@@ -99,13 +99,13 @@ export function parseAnswer(text) {
     const v = tryParse(t.slice(a, b + 1));
     if (v) return v;
   }
-  throw new Error("Ответ Claude не читается как JSON.");
+  throw new Error("Claude's answer isn't valid JSON.");
 }
 
 // One call. job: { stopped, onStop }. Returns { answer, usage }.
 export async function askClaude(system, prompt, { model = "sonnet", job } = {}) {
   const bin = findClaude();
-  if (!bin) throw new Error("Claude Code не найден в терминале этого компьютера. Попросите в чате: «подключи uberdesigner clips к Claude Code».");
+  if (!bin) throw new Error("Claude Code wasn't found in this computer's terminal. Ask in the chat: “connect uberdesigner clips to Claude Code”.");
   const cwd = join(tmpdir(), "uberdesigner-clips"); // an empty folder: nothing of the person's is in reach
   mkdirSync(cwd, { recursive: true });
   const args = ["-p", "--safe-mode", "--output-format", "json", "--tools", "", "--system-prompt", system, "--model", MODELS.includes(model) ? model : "sonnet"];
@@ -116,19 +116,19 @@ export async function askClaude(system, prompt, { model = "sonnet", job } = {}) 
     onSpawn: (child) => job && (job.onStop = () => child.kill("SIGKILL")),
   });
   if (job) job.onStop = null;
-  if (job?.stopped) throw new Error("Остановлено. Ничего не изменено.");
+  if (job?.stopped) throw new Error("Stopped. Nothing was changed.");
   let result;
   try {
     result = JSON.parse(r.out);
   } catch {
     const why = (r.err || r.out || "").trim().split("\n").slice(-2).join(" ").slice(0, 300);
-    if (/log ?in|auth|credential|api key/i.test(why)) throw new Error("Claude Code не вошёл в аккаунт. Выполните в терминале: claude auth login");
-    throw new Error(r.timedOut ? "Claude не ответил за 20 минут, запрос остановлен. Ничего не изменено." : `Claude Code завершился без ответа${why ? `: ${why}` : ""}. Ничего не изменено.`);
+    if (/log ?in|auth|credential|api key/i.test(why)) throw new Error("Claude Code isn't logged in. Run in the terminal: claude auth login");
+    throw new Error(r.timedOut ? "Claude didn't answer in 20 minutes, so the request was stopped. Nothing was changed." : `Claude Code ended without an answer${why ? `: ${why}` : ""}. Nothing was changed.`);
   }
   if (Array.isArray(result)) result = result.find((e) => e.type === "result") ?? {};
   if (result.is_error || !result.result) {
-    const why = String(result.result ?? "Claude вернул ошибку");
-    if (/log ?in|auth|credential|api key/i.test(why)) throw new Error("Claude Code не вошёл в аккаунт. Выполните в терминале: claude auth login");
+    const why = String(result.result ?? "Claude returned an error");
+    if (/log ?in|auth|credential|api key/i.test(why)) throw new Error("Claude Code isn't logged in. Run in the terminal: claude auth login");
     throw new Error(why.slice(0, 400));
   }
   const u = result.usage ?? {};
