@@ -88,7 +88,7 @@ node scripts/clips.mjs split <project> media/<video file>
 layer with `trim.in` at the shot's start, in a scene as long as the shot, `volume: 1` if the video has sound that
 matters. Name each scene by what is in it only if you looked (take a `still`); otherwise "Scene 1", "Scene 2".
 If `split` finds no cuts, make it one scene and tell the person that **S** cuts at the playhead and that the media
-library has **✂ Split into scenes** for any video added later.
+library has **Split into scenes** for any video added later.
 
 ## 2. Write clip.json
 

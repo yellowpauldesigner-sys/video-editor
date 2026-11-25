@@ -33,6 +33,28 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 
+// The editor's own icons: drawn as lines in the text's color, so they follow the theme
+const ICONS = {
+  play: '<path d="M5 3.2v9.6L12.8 8z" fill="currentColor" stroke="none"/>',
+  pause: '<path d="M4.5 3.5h2.4v9H4.5zM9.1 3.5h2.4v9H9.1z" fill="currentColor" stroke="none"/>',
+  sound: '<path d="M2.5 6.2h2.3L8 3.4v9.2L4.8 9.8H2.5z"/><path d="M10.4 5.9a3 3 0 0 1 0 4.2M12.3 4a5.7 5.7 0 0 1 0 8"/>',
+  muted: '<path d="M2.5 6.2h2.3L8 3.4v9.2L4.8 9.8H2.5z"/><path d="M10.8 6.2l3.4 3.6M14.2 6.2l-3.4 3.6"/>',
+  theme: '<circle cx="8" cy="8" r="5.2"/><path d="M8 2.8a5.2 5.2 0 0 1 0 10.4z" fill="currentColor" stroke="none"/>',
+  minus: '<path d="M3.5 8h9"/>',
+  plus: '<path d="M3.5 8h9M8 3.5v9"/>',
+  eye: '<path d="M1.6 8S4 3.8 8 3.8 14.4 8 14.4 8 12 12.2 8 12.2 1.6 8 1.6 8z"/><circle cx="8" cy="8" r="1.9"/>',
+  eyeOff: '<path d="M1.6 8S4 3.8 8 3.8 14.4 8 14.4 8 12 12.2 8 12.2 1.6 8 1.6 8z"/><path d="M3 13L13 3"/>',
+  note: '<path d="M6.2 11.6V4.2l5.6-1.2v7.2"/><circle cx="4.7" cy="11.6" r="1.5"/><circle cx="10.3" cy="10.2" r="1.5"/>',
+  close: '<path d="M4 4l8 8M12 4l-8 8"/>',
+};
+function icon(name, size = 16) {
+  const el = document.createElement("span");
+  el.className = "ic";
+  el.innerHTML = `<svg viewBox="0 0 16 16" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+  return el;
+}
+const setIcon = (id, name, size) => $(id).replaceChildren(icon(name, size));
+
 const fmtTime = (t, fps = 30) => {
   t = Math.max(0, t);
   const m = Math.floor(t / 60);
@@ -235,7 +257,8 @@ let lastTick = 0;
 function play(on) {
   if (on === S.playing) return;
   S.playing = on;
-  $("play").textContent = on ? "❚❚" : "▶";
+  setIcon("play", on ? "pause" : "play", 14);
+  $("play").setAttribute("aria-label", on ? "Pause" : "Play");
   if (!on) {
     stage?.stop();
     seek(S.t, true);
@@ -439,7 +462,7 @@ function layersView() {
           { class: `layerRow ${S.sel?.type === "layer" && S.sel.id === layer.id ? "on" : ""} ${L.hidden ? "off" : ""}`, onclick: () => select({ type: "layer", id: layer.id }) },
           h("i", { class: `kind ${layer.kind}` }),
           h("span", { class: "rowName" }, layer.label ?? layer.id),
-          h("button", { class: "eye", title: L.hidden ? `Show in ${S.format}` : `Hide in ${S.format}`, onclick: (e) => (e.stopPropagation(), edit("Layer visibility", () => setPlaced(S.clip, layer, S.format, "hidden", !L.hidden))) }, L.hidden ? "○" : "●"),
+          h("button", { class: "eye", title: L.hidden ? `Show in ${S.format}` : `Hide in ${S.format}`, onclick: (e) => (e.stopPropagation(), edit("Layer visibility", () => setPlaced(S.clip, layer, S.format, "hidden", !L.hidden))) }, icon(L.hidden ? "eyeOff" : "eye", 14)),
         ),
       );
     }
@@ -475,8 +498,8 @@ function mediaView() {
       h(
         "div",
         { class: "mediaItem", title: m.name },
-        h("div", { class: "thumb", style: m.thumb ? `background-image:url("${m.thumb}")` : "" }, m.kind === "audio" ? "♪" : ""),
-        h("div", { class: "acts" }, m.kind === "audio" ? h("button", { onclick: () => addAudio(m) }, "+ Audio track") : [h("button", { onclick: () => addMediaScene(m) }, "+ As a new scene"), h("button", { onclick: () => addMediaLayer(m) }, "+ Into this scene"), m.kind === "video" && m.duration > 2 ? h("button", { onclick: () => splitIntoScenes(m) }, "✂ Split into scenes") : null], used.has(m.path) ? null : h("button", { class: "rm", title: "Remove the file from the clip", onclick: () => removeMedia(m) }, "Remove file")),
+        h("div", { class: "thumb", style: m.thumb ? `background-image:url("${m.thumb}")` : "" }, m.kind === "audio" ? icon("note", 22) : null),
+        h("div", { class: "acts" }, m.kind === "audio" ? h("button", { onclick: () => addAudio(m) }, "+ Audio track") : [h("button", { onclick: () => addMediaScene(m) }, "+ As a new scene"), h("button", { onclick: () => addMediaLayer(m) }, "+ Into this scene"), m.kind === "video" && m.duration > 2 ? h("button", { onclick: () => splitIntoScenes(m) }, "Split into scenes") : null], used.has(m.path) ? null : h("button", { class: "rm", title: "Remove the file from the clip", onclick: () => removeMedia(m) }, "Remove file")),
         h("div", { class: "cap" }, h("b", {}, m.name), h("span", {}, meta || KIND_NAME[m.kind])),
       ),
     );
@@ -776,27 +799,31 @@ function drawTimeline() {
   });
   kids.push(sceneTrack);
 
+  // Every scene's layers are on the timeline at once, as in any editor: a scene's top layer in the first row, the
+  // next one under it, and so on. The scene that is picked is only tinted behind its own stretch.
   const scene = curScene();
   const si = S.clip.scenes.indexOf(scene);
-  const s0 = starts[si];
-  kids.push(h("div", { class: "sceneShade", style: `left:${t2x(s0)}px;width:${sceneDuration(scene) * S.zoom}px` }));
-  for (const layer of [...scene.layers].reverse()) {
-    const L = resolveLayer(layer, S.format);
-    const span = layerSpan(layer, scene);
-    const len = Math.min(span.duration, sceneDuration(scene) - span.start);
-    kids.push(
-      h(
-        "div",
-        { class: "track" },
+  kids.push(h("div", { class: "sceneShade", style: `left:${t2x(starts[si])}px;width:${sceneDuration(scene) * S.zoom}px` }));
+  const rows = Math.max(1, ...S.clip.scenes.map((sc) => sc.layers.length));
+  for (let r = 0; r < rows; r++) {
+    const track = h("div", { class: "track" });
+    S.clip.scenes.forEach((sc, i) => {
+      const layer = sc.layers[sc.layers.length - 1 - r];
+      if (!layer) return;
+      const L = resolveLayer(layer, S.format);
+      const span = layerSpan(layer, sc);
+      const len = Math.min(span.duration, sceneDuration(sc) - span.start);
+      track.append(
         h(
           "div",
-          { class: `bar2 ${layer.kind} ${S.sel?.id === layer.id ? "on" : ""} ${L.hidden ? "off" : ""}`, style: `left:${t2x(s0 + span.start)}px;width:${Math.max(8, len * S.zoom - 1)}px`, title: `${layer.label ?? layer.id} · ${secs(len)}`, onpointerdown: (e) => layerDown(e, layer, scene) },
+          { class: `bar2 ${layer.kind} ${S.sel?.id === layer.id ? "on" : ""} ${L.hidden ? "off" : ""}`, style: `left:${t2x(starts[i] + span.start)}px;width:${Math.max(8, len * S.zoom - 1)}px`, title: `${layer.label ?? layer.id} · ${secs(len)}`, onpointerdown: (e) => layerDown(e, layer, sc) },
           h("div", { class: "grip l", "data-grip": "l" }),
           h("div", { class: "lbl" }, layer.label ?? layer.id),
           h("div", { class: "grip r", "data-grip": "r" }),
         ),
-      ),
-    );
+      );
+    });
+    kids.push(track);
   }
   for (const a of S.clip.audio ?? []) {
     const start = a.start ?? 0;
@@ -805,7 +832,7 @@ function drawTimeline() {
       h(
         "div",
         { class: "track" },
-        h("div", { class: `bar2 audio ${S.sel?.id === a.id ? "on" : ""}`, style: `left:${t2x(start)}px;width:${Math.max(8, len * S.zoom - 1)}px`, onpointerdown: (e) => audioDown(e, a) }, h("div", { class: "lbl" }, `♪ ${a.label ?? a.src.split("/").pop()}`), h("div", { class: "grip r", "data-grip": "r" })),
+        h("div", { class: `bar2 audio ${S.sel?.id === a.id ? "on" : ""}`, style: `left:${t2x(start)}px;width:${Math.max(8, len * S.zoom - 1)}px`, onpointerdown: (e) => audioDown(e, a) }, h("div", { class: "lbl" }, a.label ?? a.src.split("/").pop()), h("div", { class: "grip r", "data-grip": "r" })),
       ),
     );
   }
@@ -818,11 +845,12 @@ function drawPlayhead() {
   const ph = $("playhead");
   if (ph) ph.style.left = `${t2x(S.t)}px`;
   $("time").textContent = fmtTime(S.t, S.clip.fps);
-  if (S.playing) {
-    const tl = $("timeline");
-    const x = t2x(S.t);
-    if (x > tl.scrollLeft + tl.clientWidth - 40 || x < tl.scrollLeft) tl.scrollLeft = Math.max(0, x - 80);
-  }
+  // The timeline keeps the playhead in view while the clip plays and when it is moved from the keyboard or a
+  // click elsewhere. While it is being dragged, the drag itself scrolls the timeline at its edges.
+  if (S.scrubbing) return;
+  const tl = $("timeline");
+  const x = t2x(S.t);
+  if (x > tl.scrollLeft + tl.clientWidth - 40 || x < tl.scrollLeft + 8) tl.scrollLeft = Math.max(0, x - (S.playing ? 80 : tl.clientWidth / 2));
 }
 
 // One pointer drag on the timeline: `on(dt, event)` gets the time moved since the press
@@ -849,22 +877,44 @@ function drag(e, on, done) {
 function scrubDown(e) {
   play(false);
   const tl = $("timeline");
-  const at = (ev) => x2t(ev.clientX - $("tlInner").getBoundingClientRect().left);
-  seek(at(e));
-  const move = (ev) => seek(at(ev));
+  const at = (x) => x2t(x - $("tlInner").getBoundingClientRect().left);
+  let pointerX = e.clientX;
+  S.scrubbing = true;
+  seek(at(pointerX));
+  // Dragged to an edge, the timeline scrolls under the pointer, faster the further past the edge it is held
+  let raf = 0;
+  const follow = () => {
+    const box = tl.getBoundingClientRect();
+    const EDGE = 48;
+    const over = pointerX > box.right - EDGE ? pointerX - (box.right - EDGE) : pointerX < box.left + EDGE ? pointerX - (box.left + EDGE) : 0;
+    if (over) {
+      const before = tl.scrollLeft;
+      tl.scrollLeft += Math.sign(over) * Math.min(28, 4 + Math.abs(over) * 0.35);
+      if (tl.scrollLeft !== before) seek(at(Math.max(box.left, Math.min(box.right, pointerX))));
+    }
+    raf = requestAnimationFrame(follow);
+  };
+  raf = requestAnimationFrame(follow);
+  const move = (ev) => {
+    pointerX = ev.clientX;
+    const box = tl.getBoundingClientRect();
+    seek(at(Math.max(box.left, Math.min(box.right, pointerX))));
+  };
   const up = () => {
     removeEventListener("pointermove", move);
     removeEventListener("pointerup", up);
+    cancelAnimationFrame(raf);
+    S.scrubbing = false;
     const s = sceneAt(S.clip, S.t).scene;
     if (s.id !== S.sceneId) {
       S.sceneId = s.id;
       drawLeft();
       drawTimeline();
+      drawChip();
     }
   };
   addEventListener("pointermove", move);
   addEventListener("pointerup", up);
-  void tl;
 }
 
 function sceneDown(e, scene, index) {
@@ -1504,7 +1554,7 @@ function drawJobs() {
       h(
         "div",
         { class: `job ${j.state}` },
-        h("div", { class: "jt" }, j.state === "running" ? h("i", { class: "spin" }) : null, h("b", {}, j.label), j.state === "running" ? h("button", { class: "ghost", onclick: () => B.stopJob(j.id) }, "Stop") : h("button", { class: "icon", title: "Close", onclick: () => (S.seenJobs.add(j.id), drawJobs()) }, "×")),
+        h("div", { class: "jt" }, j.state === "running" ? h("i", { class: "spin" }) : null, h("b", {}, j.label), j.state === "running" ? h("button", { class: "ghost", onclick: () => B.stopJob(j.id) }, "Stop") : h("button", { class: "icon", title: "Close", "aria-label": "Close", onclick: () => (S.seenJobs.add(j.id), drawJobs()) }, icon("close", 12))),
         j.state === "running" ? h("div", { class: "bar" }, h("i", { style: `width:${Math.round((j.progress ?? 0) * 100)}%` })) : null,
         h("div", { class: "note" }, j.state === "failed" || j.state === "stopped" ? j.error : j.state === "done" ? "Site recorded." : j.note || "Waiting in line…"),
       ),
@@ -1514,10 +1564,10 @@ function drawJobs() {
       h(
         "div",
         { class: `job ${j.state}` },
-        h("div", { class: "jt" }, j.state === "running" ? h("i", { class: "spin" }) : null, h("b", {}, j.label), j.state === "running" ? h("button", { class: "ghost", onclick: () => ((j.stopped = true), (j.note = "Stopping…"), drawJobs()) }, "Stop") : h("button", { class: "icon", title: "Close", onclick: () => ((j.closed = true), drawJobs()) }, "×")),
+        h("div", { class: "jt" }, j.state === "running" ? h("i", { class: "spin" }) : null, h("b", {}, j.label), j.state === "running" ? h("button", { class: "ghost", onclick: () => ((j.stopped = true), (j.note = "Stopping…"), drawJobs()) }, "Stop") : h("button", { class: "icon", title: "Close", "aria-label": "Close", onclick: () => ((j.closed = true), drawJobs()) }, icon("close", 12))),
         j.state === "running" ? h("div", { class: "bar" }, h("i", { style: `width:${Math.round((j.progress ?? 0) * 100)}%` })) : null,
         h("div", { class: "note" }, j.state === "failed" || j.state === "stopped" ? j.error : j.state === "done" ? (j.doneNote ?? (PROJECT ? "Done. The files are in the clip's renders folder:" : "Done. Click a file to download it:")) : j.note),
-        j.files.length ? h("div", { class: "files" }, j.files.map((f) => h("a", { href: f.url, download: f.download ? f.name : null, target: f.download ? null : "_blank" }, `${f.download ? "↓" : "▶"} ${f.format} · ${f.name} · ${(f.size / 1e6).toFixed(1)} MB${f.note ? ` · ${f.note}` : ""}`)), PROJECT ? h("button", { class: "ghost", style: "justify-self:start;margin-left:-9px", onclick: () => B.reveal(j.files[0].path) }, "Show in folder") : null) : null,
+        j.files.length ? h("div", { class: "files" }, j.files.map((f) => h("a", { href: f.url, download: f.download ? f.name : null, target: f.download ? null : "_blank" }, `${f.download ? "Download" : "Open"} ${f.format} · ${f.name} · ${(f.size / 1e6).toFixed(1)} MB${f.note ? ` · ${f.note}` : ""}`)), PROJECT ? h("button", { class: "ghost", style: "justify-self:start;margin-left:-9px", onclick: () => B.reveal(j.files[0].path) }, "Show in folder") : null) : null,
       ),
     );
   box.replaceChildren(...kids);
@@ -1667,7 +1717,8 @@ function wire() {
   $("play").addEventListener("click", () => play(!S.playing));
   $("mute").addEventListener("click", () => {
     S.muted = !S.muted;
-    $("mute").textContent = S.muted ? "🔇" : "🔊";
+    setIcon("mute", S.muted ? "muted" : "sound");
+    $("mute").setAttribute("aria-pressed", String(S.muted));
     stage?.setMuted(S.muted);
   });
   $("splitBtn").addEventListener("click", splitAtPlayhead);
@@ -1790,6 +1841,11 @@ async function boot() {
   } catch {
     document.documentElement.dataset.theme = "dark";
   }
+  setIcon("play", "play", 14);
+  setIcon("mute", "sound");
+  setIcon("theme", "theme");
+  setIcon("zoomOut", "minus");
+  setIcon("zoomIn", "plus");
   stage = new Stage($("stage"));
   stage.onMediaReady = () => !S.playing && !seekBusy && seek(S.t, true);
   S.clips = await B.listClips();

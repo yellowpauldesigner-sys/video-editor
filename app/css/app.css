@@ -1420,3 +1420,22 @@ select:focus,
 .welcomeCard .btnRow {
   justify-content: center;
 }
+
+/* icons */
+.ic {
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+}
+.ic svg {
+  display: block;
+}
+.icon.big .ic svg {
+  margin-left: 1px;
+}
+.mediaItem .thumb .ic {
+  color: var(--dim);
+}
+.timeline {
+  height: 252px;
+}
